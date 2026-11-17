@@ -7,7 +7,7 @@ import { USER_COOKIE, currentUserFromCookie } from "@/lib/users";
 export const metadata: Metadata = {
   title: "Đấu La Đại Lục — Wiki Võ Hồn & Mua Key Premium",
   description:
-    "Plugin Minecraft Đấu La Đại Lục 3.15.9 — Wiki 9 Võ Hồn, tải jar FREE, đăng ký nhận key bản thường, mua key Premium (VietQR / thẻ cào), kích hoạt offline.",
+    "Plugin Minecraft Đấu La Đại Lục 3.16.0 — Wiki 9 Võ Hồn, tải jar FREE, đăng ký nhận key bản thường, mua key Premium (VietQR / thẻ cào), kích hoạt offline.",
 };
 
 /* Link "Quản trị" CHỈ render khi phiên đăng nhập là đúng TRUC_LINH (so username, không so role
@@ -41,7 +41,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <main>{children}</main>
         <footer className="site-footer">
           <div className="inner">
-            ⚔ Đấu La Đại Lục v3.15.9 · <a href="/eula">EULA</a> · <a href="/privacy">Quyền riêng tư</a> · Hỗ trợ mua key:{" "}
+            ⚔ Đấu La Đại Lục v3.16.0 · <a href="/eula">EULA</a> · <a href="/privacy">Quyền riêng tư</a> · Hỗ trợ mua key:{" "}
             <a href="https://discord.gg/uNDvZ38TC" target="_blank" rel="noreferrer">
               discord.gg/uNDvZ38TC
             </a>

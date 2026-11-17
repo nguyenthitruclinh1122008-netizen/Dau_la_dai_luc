@@ -15,7 +15,7 @@ export default function EulaPage() {
     <div className="wiki" style={{ maxWidth: 820, margin: "0 auto", padding: "24px 16px" }}>
       <h1 style={{ color: "#f5c542" }}>Điều khoản sử dụng (EULA)</h1>
       <p style={{ opacity: 0.75, fontSize: "0.9rem" }}>
-        Bản 3.15.9 · 1 key dùng cho 1 server · EULA này hiển thị đúng nội dung file EULA.md
+        Bản 3.16.0 · 1 key dùng cho 1 server · EULA này hiển thị đúng nội dung file EULA.md
         đóng gói trong plugin (mở jar cũng đọc được).
       </p>
       <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", lineHeight: 1.65, fontSize: "0.95rem" }}>

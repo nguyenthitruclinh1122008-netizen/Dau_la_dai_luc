@@ -7,11 +7,11 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const buf = await readFile(path.join(process.cwd(), "assets", "jar", "DauLaDaiLuc-Free-3.15.9.jar"));
+    const buf = await readFile(path.join(process.cwd(), "assets", "jar", "DauLaDaiLuc-Free-3.16.0.jar"));
     return new Response(new Uint8Array(buf), {
       headers: {
         "Content-Type": "application/java-archive",
-        "Content-Disposition": 'attachment; filename="DauLaDaiLuc-Free-3.15.9.jar"',
+        "Content-Disposition": 'attachment; filename="DauLaDaiLuc-Free-3.16.0.jar"',
         "Cache-Control": "public, max-age=3600",
       },
     });

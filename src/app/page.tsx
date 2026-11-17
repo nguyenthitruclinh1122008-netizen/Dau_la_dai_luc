@@ -11,12 +11,12 @@ export default function Home() {
       <section className="hero">
         <h1>⚔ ĐẤU LA ĐẠI LỤC ⚔</h1>
         <p className="sub">
-          Plugin Minecraft <b>Đấu La Đại Lục v3.15.9</b> — Thức tỉnh 9 Võ Hồn, tu luyện Hồn Lực, hấp thụ Hồn Hoàn, Hồn
+          Plugin Minecraft <b>Đấu La Đại Lục v3.16.0</b> — Thức tỉnh 9 Võ Hồn, tu luyện Hồn Lực, hấp thụ Hồn Hoàn, Hồn
           Cốt, triệu hồi Hồn Thú. Bản FREE miễn phí — bản PREMIUM mở khóa đủ 9 Hồn Hoàn + Hồn Cốt + Võ Hồn đỉnh cao.
         </p>
         <div className="actions">
           <a className="btn btn-gold" href="/api/download/free">
-            ⚡ TẢI JAR FREE — v3.15.9
+            ⚡ TẢI JAR FREE — v3.16.0
           </a>
           <Link className="btn btn-ghost" href="/user">
             💎 Mua Key Premium

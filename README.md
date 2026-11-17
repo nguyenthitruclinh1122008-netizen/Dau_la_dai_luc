@@ -26,7 +26,7 @@ Từ bản plugin **2.3.0**, hệ thống chuyển sang mô hình **ticket-only*
 4. **Gắn ID server Minecraft** (world UID): đổi server tối đa `LICENSE_REBIND_LIMIT` (2) lần/30 ngày — nút **🔓 Reset máy** trong /admin mở lại lượt.
 5. **Heartbeat 10–30 phút** (mặc định 15, cấu hình `licensing.online.heartbeat-minutes` trong plugin). Thu hồi/hết hạn → server khách **xóa vé + key và về Free** ngay.
 6. **HTTPS bắt buộc + pin chứng chỉ** (SPKI SHA-256 — TOFU lưu trong secure.dat của server khách; hỗ trợ pin nhúng build).
-7. **URL license cố định trong plugin**: `licensing.online.url` trong config.yml plugin **phải đúng domain nhúng trong jar** (jar 3.15.9 đang nhúng `dau-la-dailuc.netlify.app` (chính) + `daula.vercel.app` (phụ) — sau khi deploy Vercel xong sẽ build jar 3.16.0 nhúng domain mới làm chính (xem hướng dẫn riêng)). Trống/sai host → chỉ chạy Free.
+7. **URL license cố định trong plugin**: `licensing.online.url` trong config.yml plugin **phải đúng domain nhúng trong jar** (jar 3.16.0 nhúng `dau-la-dai-luc-livid.vercel.app` làm CHÍNH + `dau-la-dailuc.netlify.app` làm PHỤ (build 2026-11-17; RP url cũng trỏ Vercel)). Trống/sai host → chỉ chạy Free.
 8. **Key shop mới dạng `DL-XXXX-XXXX-XXXX-XXXX`** — mã tra cứu DB, không nhúng bí mật. Key định dạng cũ (có dấu `.`) bị plugin từ chối.
 9. **Jar phát hành sạch**: không `SourceFile`, không số dòng, không `pom.xml`; chuỗi nhạy cảm XOR-mã hóa; chống sửa jar bằng manifest SHA-256 (jar bị vá 1 byte → tự khóa Premium, không crash).
 
