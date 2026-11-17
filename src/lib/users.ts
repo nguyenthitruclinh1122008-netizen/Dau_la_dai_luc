@@ -140,6 +140,23 @@ export async function currentUser(req: Request): Promise<SessionUser | null> {
   return (rows[0] as SessionUser) || null;
 }
 
+/** currentUser cho Server Component (đọc cookie từ next/headers, không có Request).
+    FAIL-CLOSED: cookie sai / hết hạn / DB lỗi → null (không ai bị coi là TRUC_LINH khi lỗi). */
+export async function currentUserFromCookie(token?: string | null): Promise<SessionUser | null> {
+  try {
+    const id = verifyUserToken(token);
+    if (!id) return null;
+    const rows = await q(
+      `SELECT id, username, contact, gift_key, created_at, last_login, role
+         FROM users WHERE id=$1`,
+      [id],
+    );
+    return (rows[0] as SessionUser) || null;
+  } catch {
+    return null;
+  }
+}
+
 /** http hay https — quyết định cờ Secure của cookie (Vercel = https) */
 export function isHttps(req: Request): boolean {
   if (req.url && req.url.startsWith("https://")) return true;

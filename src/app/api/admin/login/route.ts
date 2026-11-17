@@ -1,7 +1,9 @@
 /* POST /api/admin/login — đăng nhập bằng ADMIN_SECRET (constant-time)
-   Đúng → đặt cookie dl_admin (HMAC-signed, HttpOnly, hạn 1 ngày) */
+   LỚP 1: phải có phiên đăng nhập của ĐÚNG TRUC_LINH (so username) — role admin khác cũng không đủ.
+   LỚP 2: nhập đúng ADMIN_SECRET → đặt cookie dl_admin (HMAC-signed, HttpOnly, hạn 1 ngày) */
 import { NextResponse } from "next/server";
 import { checkAdminPassword, makeAdminToken, ADMIN_COOKIE } from "@/lib/auth";
+import { currentUser } from "@/lib/users";
 import { log } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +15,15 @@ function ipOf(req: Request): string {
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const password = String(body.password || "");
+  /* Lớp 1 — phiên TRUC_LINH bắt buộc: không có phiên / phiên của người khác → 403 */
+  const u = await currentUser(req).catch(() => null);
+  if (!u || u.username !== "TRUC_LINH") {
+    await log("ADMIN_LOGIN_FAIL", "Không phải phiên TRUC_LINH /admin", ipOf(req));
+    return NextResponse.json(
+      { error: "Phải đăng nhập tài khoản TRUC_LINH trước khi nhập mật khẩu quản trị" },
+      { status: 403 },
+    );
+  }
   if (!checkAdminPassword(password)) {
     await log("ADMIN_LOGIN_FAIL", "Sai mật khẩu /admin", ipOf(req));
     return NextResponse.json({ error: "Mật khẩu không đúng" }, { status: 401 });

@@ -1,7 +1,8 @@
-/* Trang chủ / — Wiki 9 Võ Hồn + nút tải JAR + thanh đánh giá (không cần Gmail) */
+/* Trang chủ / — Wiki 9 Võ Hồn + nút tải JAR + bảng giá Premium + thanh đánh giá (không cần Gmail) */
 import Link from "next/link";
 import Rating from "./rating";
 import KeyCheck from "@/components/KeyCheck";
+import PriceTable from "@/components/PriceTable";
 import { SOULS, SKILL_LABEL, COMMANDS } from "@/data/souls";
 
 export default function Home() {
@@ -10,12 +11,12 @@ export default function Home() {
       <section className="hero">
         <h1>⚔ ĐẤU LA ĐẠI LỤC ⚔</h1>
         <p className="sub">
-          Plugin Minecraft <b>Đấu La Đại Lục v2.3.0</b> — Thức tỉnh 9 Võ Hồn, tu luyện Hồn Lực, hấp thụ Hồn Hoàn, Hồn
+          Plugin Minecraft <b>Đấu La Đại Lục v3.15.9</b> — Thức tỉnh 9 Võ Hồn, tu luyện Hồn Lực, hấp thụ Hồn Hoàn, Hồn
           Cốt, triệu hồi Hồn Thú. Bản FREE miễn phí — bản PREMIUM mở khóa đủ 9 Hồn Hoàn + Hồn Cốt + Võ Hồn đỉnh cao.
         </p>
         <div className="actions">
           <a className="btn btn-gold" href="/api/download/free">
-            ⚡ TẢI JAR FREE — v2.3.0
+            ⚡ TẢI JAR FREE — v3.15.9
           </a>
           <Link className="btn btn-ghost" href="/user">
             💎 Mua Key Premium
@@ -31,6 +32,8 @@ export default function Home() {
           </a>
         </p>
       </section>
+
+      <PriceTable />
 
       <Rating />
 

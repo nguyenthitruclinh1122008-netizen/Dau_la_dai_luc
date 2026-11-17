@@ -1,0 +1,3 @@
+{
+  "/api/admin/licenses/[id]/revoke/route": "app/api/admin/licenses/[id]/revoke/route.js"
+}
