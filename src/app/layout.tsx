@@ -32,6 +32,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <nav>
               <a href="/">Wiki &amp; Tải</a>
               <a href="/user">Mua Key</a>
+              <a href="/kiem-tra">Kiểm Tra Key</a>
               <a href="/dang-ky">Đăng Ký</a>
               {isAdminRoot ? <a href="/admin">Quản trị</a> : null}
               <UserBadge />
