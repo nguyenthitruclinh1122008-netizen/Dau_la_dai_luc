@@ -103,6 +103,13 @@ const SCHEMA_STATEMENTS = [
      Gắn/gỡ trong /admin tab Tài khoản; duyệt đơn mua cũng tự gắn khi khớp tài khoản. */
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS vip INT NOT NULL DEFAULT 0`,
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS vip_since TIMESTAMPTZ`,
+  /* khuyến mãi từng gói: GIÁ KM TRỰC TIẾP + khoảng thời gian áp dụng (tùy chọn).
+     sale_price = 0 → không giảm giá; sale_start/sale_end NULL → áp dụng ngay và vô hạn
+     đến khi admin tắt. Quá sale_end giá tự quay về price_vnd ở MỌI nơi (bảng giá
+     trang chủ/trang mua key, số tiền đơn + QR VietQR) — không cần ai can thiệp. */
+  `ALTER TABLE packages ADD COLUMN IF NOT EXISTS sale_price INT NOT NULL DEFAULT 0`,
+  `ALTER TABLE packages ADD COLUMN IF NOT EXISTS sale_start TIMESTAMPTZ`,
+  `ALTER TABLE packages ADD COLUMN IF NOT EXISTS sale_end TIMESTAMPTZ`,
   `CREATE TABLE IF NOT EXISTS ratings (
      id         SERIAL PRIMARY KEY,
      score      INT NOT NULL,
@@ -269,6 +276,33 @@ function cryptoRandom(): string {
   let out = "";
   for (const b of buf) out += alphabet[b % alphabet.length];
   return out;
+}
+
+/* ===== KHUYẾN MÃI TỪNG GÓI (sale_price + sale_start/sale_end) =====
+   Nguồn sự thật DUY NHẤT cho "giá đang hiển thị/thu tiền" — mọi route dùng
+   2 hàm dưới đây để không có chỗ nào lệch giữa giá bán và giá trên QR. */
+
+/** Đang còn trong thời gian khuyến mãi? (sale_price>0 + trong khoảng sale_start/sale_end) */
+export function saleActive(pkg: Row, now: Date = new Date()): boolean {
+  const sp = Number(pkg.sale_price || 0);
+  if (sp <= 0) return false;
+  const s = pkg.sale_start ? new Date(String(pkg.sale_start)) : null;
+  const e = pkg.sale_end ? new Date(String(pkg.sale_end)) : null;
+  if (s && now < s) return false;
+  if (e && now > e) return false;
+  return sp < Number(pkg.price_vnd); // giá KM phải thấp hơn giá gốc mới có nghĩa
+}
+
+/** Giá hiệu lực tại thời điểm now: đang KM thì sale_price, hết/quá giờ thì giá gốc */
+export function effPrice(pkg: Row, now: Date = new Date()): number {
+  return saleActive(pkg, now) ? Number(pkg.sale_price) : Number(pkg.price_vnd);
+}
+
+/** % giảm làm nhãn "-X%" (không KM → 0) */
+export function salePercent(pkg: Row, now: Date = new Date()): number {
+  const orig = Number(pkg.price_vnd);
+  if (!saleActive(pkg, now) || orig <= 0) return 0;
+  return Math.round(((orig - Number(pkg.sale_price)) / orig) * 100);
 }
 
 import { randomBytes } from "node:crypto";

@@ -13,6 +13,9 @@ interface Pkg {
   name: string;
   days: number;
   price_vnd: number;
+  price: number;
+  on_sale: boolean;
+  discount_pct: number;
 }
 interface OrderInfo {
   order: {
@@ -270,7 +273,27 @@ export default function UserPage() {
                 <b>{p.name}</b>
                 <br />
                 <span style={{ fontWeight: 400, fontSize: "0.9rem" }}>
-                  {p.days === 0 ? "hạn 2275 — dùng vĩnh viễn" : `hạn +${p.days} ngày`} · <b>{fmt(p.price_vnd)}</b>
+                  {p.days === 0 ? "hạn 2275 — dùng vĩnh viễn" : `hạn +${p.days} ngày`} ·{" "}
+                  {p.on_sale ? (
+                    <>
+                      <s style={{ color: "var(--muted)" }}>{fmt(p.price_vnd)}</s>{" "}
+                      <b style={{ color: "#4ade80" }}>{fmt(p.price)}</b>{" "}
+                      <span
+                        style={{
+                          background: "#e5484d",
+                          color: "#fff",
+                          borderRadius: 999,
+                          padding: "1px 7px",
+                          fontSize: "0.72rem",
+                          fontWeight: 800,
+                        }}
+                      >
+                        -{p.discount_pct}%
+                      </span>
+                    </>
+                  ) : (
+                    <b>{fmt(p.price_vnd)}</b>
+                  )}
                 </span>
               </button>
             ))}
@@ -279,7 +302,18 @@ export default function UserPage() {
 
         {step !== "chon" && chosen && (
           <div className="card">
-            <h3>Thông tin người mua — {chosen.name} ({fmt(chosen.price_vnd)})</h3>
+            <h3>
+              Thông tin người mua — {chosen.name} (
+              {chosen.on_sale ? (
+                <>
+                  <s style={{ color: "var(--muted)", fontSize: "0.85em" }}>{fmt(chosen.price_vnd)}</s>{" "}
+                  <b style={{ color: "#4ade80" }}>{fmt(chosen.price)}</b> (giá đã giảm)
+                </>
+              ) : (
+                fmt(chosen.price_vnd)
+              )}
+              )
+            </h3>
             <div className="grid grid-2">
               <label>
                 Tên gọi trong game / họ tên

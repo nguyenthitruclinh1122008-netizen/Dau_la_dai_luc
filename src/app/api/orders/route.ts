@@ -1,7 +1,7 @@
 /* POST /api/orders — khách tạo đơn mua key (chuyển khoản VietQR hoặc thẻ cào)
    KHÔNG BAO GIỜ tự cấp key ở đây — đơn luôn 'pending' chờ admin duyệt. */
 import { NextResponse } from "next/server";
-import { q, log, genOrderCode } from "@/lib/db";
+import { q, log, genOrderCode, effPrice, saleActive, salePercent } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -32,21 +32,30 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Thẻ cào cần nhập nhà mạng, serial và mã thẻ" }, { status: 400 });
     }
 
-    const pk = await q(`SELECT code, name, days, price_vnd FROM packages WHERE code=$1 AND enabled=1`, [packageCode]);
+    const pk = await q(
+      `SELECT code, name, days, price_vnd, sale_price, sale_start, sale_end
+       FROM packages WHERE code=$1 AND enabled=1`,
+      [packageCode],
+    );
     if (pk.length === 0) {
       return NextResponse.json({ error: "Gói không tồn tại hoặc đã ngừng bán" }, { status: 400 });
     }
     const pkg = pk[0];
+    /* Giá thu tiền = GIÁ HIỆU LỰC tại thời điểm tạo đơn (đang KM → sale_price,
+       hết giờ KM → giá gốc) — trùng khớp giá khách thấy ở bảng giá. */
+    const amount = effPrice(pkg);
 
     const code = await genOrderCode();
     await q(
       `INSERT INTO orders (code, type, buyer_name, buyer_contact, package_code, amount_vnd, note)
        VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [code, type, buyerName, buyerContact, pkg.code, pkg.price_vnd, note || null],
+      [code, type, buyerName, buyerContact, pkg.code, amount, note || null],
     );
-    await log("ORDER_CREATE", `${code} · ${pkg.name} · ${pkg.price_vnd}đ · ${type}`, ipOf(req));
+    const saleTag = saleActive(pkg) ? ` (KM ${salePercent(pkg)}% — gốc ${pkg.price_vnd}đ)` : "";
+    await log("ORDER_CREATE", `${code} · ${pkg.name} · ${amount}đ${saleTag} · ${type}`, ipOf(req));
 
-    /* QR VietQR (không cần API key) — admin đổi thông tin ngân hàng trong /admin */
+    /* QR VietQR (không cần API key) — admin đổi thông tin ngân hàng trong /admin.
+       amount = GIÁ ĐÃ GIẢM nếu gói đang khuyến mãi. */
     const st = await q(`SELECT key, value FROM settings WHERE key LIKE 'bank_%'`);
     const bankName = st.find((r) => r.key === "bank_name")?.value || "Vietcombank";
     const bankAccount = st.find((r) => r.key === "bank_account")?.value || "0";
@@ -57,7 +66,7 @@ export async function POST(req: Request) {
       "-" +
       encodeURIComponent(bankAccount) +
       "-compact2.png?amount=" +
-      pkg.price_vnd +
+      amount +
       "&addInfo=" +
       encodeURIComponent(code) +
       "&accountName=" +
@@ -70,7 +79,10 @@ export async function POST(req: Request) {
           type,
           package_code: pkg.code,
           pkg_name: pkg.name,
-          amount_vnd: pkg.price_vnd,
+          amount_vnd: amount,
+          original_price_vnd: Number(pkg.price_vnd),
+          on_sale: saleActive(pkg),
+          discount_pct: salePercent(pkg),
           status: "pending",
           note: note || null,
         },

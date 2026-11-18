@@ -29,6 +29,9 @@ interface Pkg {
   name: string;
   days: number;
   price_vnd: number;
+  sale_price: number;
+  sale_start: string | null;
+  sale_end: string | null;
   enabled: number;
   sort: number;
 }
@@ -87,6 +90,14 @@ interface U {
 const fmt = (n: number) => Number(n).toLocaleString("vi-VN") + "đ";
 const dt = (s: string | null) => (s ? new Date(s).toLocaleString("vi-VN") : "-");
 const chip = (st: string) => <span className={"chip chip-" + st}>{st}</span>;
+/* ISO từ DB → giá trị cho <input type="datetime-local"> (YYYY-MM-DDTHH:mm, giờ máy admin) */
+const toLocalInput = (s: string | null) => {
+  if (!s) return "";
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return "";
+  const p = (x: number) => String(x).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+};
 
 export default function AdminGate() {
   const [admin, setAdmin] = useState<boolean | null>(null);
@@ -652,62 +663,125 @@ export default function AdminGate() {
 
       {tab === "packages" && (
         <div className="card">
+          <p style={{ color: "var(--muted)", fontSize: "0.85rem", marginTop: 0 }}>
+            💡 <b>Khuyến mãi từng gói</b>: điền <b>Giá KM</b> (0 = không giảm) + <i>tùy chọn</i> ngày bắt đầu/kết thúc
+            (để trống cả 2 = áp dụng NGAY và mãi đến khi tự tắt). Hết giờ kết thúc giá <b>tự quay về giá gốc</b> ở mọi
+            nơi — trang chủ, trang Mua Key, số tiền QR VietQR — không cần làm gì thêm. Nhãn "-X%" tự tính.
+          </p>
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
                   <th>Gói</th>
                   <th>Tên hiển thị</th>
-                  <th>Giá (đ)</th>
+                  <th>Giá gốc (đ)</th>
+                  <th>Giá KM (đ)</th>
+                  <th>Bắt đầu KM</th>
+                  <th>Kết thúc KM</th>
+                  <th>Đang bán</th>
                   <th>Bán?</th>
                 </tr>
               </thead>
               <tbody>
-                {pkgs.map((p, i) => (
-                  <tr key={p.code}>
-                    <td>
-                      <code>{p.code}</code> ({p.days === 0 ? "vĩnh viễn" : p.days + " ngày"})
-                    </td>
-                    <td>
-                      <input
-                        value={p.name}
-                        onChange={(e) => {
-                          const c = [...pkgs];
-                          c[i] = { ...p, name: e.target.value };
-                          setPkgs(c);
-                        }}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        value={p.price_vnd}
-                        onChange={(e) => {
-                          const c = [...pkgs];
-                          c[i] = { ...p, price_vnd: Number(e.target.value) };
-                          setPkgs(c);
-                        }}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={p.enabled === 1}
-                        onChange={(e) => {
-                          const c = [...pkgs];
-                          c[i] = { ...p, enabled: e.target.checked ? 1 : 0 };
-                          setPkgs(c);
-                        }}
-                        aria-label="Bật bán gói"
-                      />
-                    </td>
-                  </tr>
-                ))}
+                {pkgs.map((p, i) => {
+                  const onSale = p.sale_price > 0 && p.sale_price < p.price_vnd;
+                  const pct = onSale ? Math.round(((p.price_vnd - p.sale_price) / p.price_vnd) * 100) : 0;
+                  return (
+                    <tr key={p.code}>
+                      <td>
+                        <code>{p.code}</code> ({p.days === 0 ? "vĩnh viễn" : p.days + " ngày"})
+                      </td>
+                      <td>
+                        <input
+                          value={p.name}
+                          onChange={(e) => {
+                            const c = [...pkgs];
+                            c[i] = { ...p, name: e.target.value };
+                            setPkgs(c);
+                          }}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          value={p.price_vnd}
+                          onChange={(e) => {
+                            const c = [...pkgs];
+                            c[i] = { ...p, price_vnd: Number(e.target.value) };
+                            setPkgs(c);
+                          }}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          value={p.sale_price || 0}
+                          style={onSale ? { borderColor: "var(--gold, #ffd257)", fontWeight: 700 } : undefined}
+                          onChange={(e) => {
+                            const c = [...pkgs];
+                            c[i] = { ...p, sale_price: Number(e.target.value) };
+                            setPkgs(c);
+                          }}
+                          aria-label="Giá khuyến mãi (0 = không giảm)"
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="datetime-local"
+                          value={toLocalInput(p.sale_start)}
+                          onChange={(e) => {
+                            const c = [...pkgs];
+                            c[i] = { ...p, sale_start: e.target.value || null };
+                            setPkgs(c);
+                          }}
+                          aria-label="Thời điểm bắt đầu khuyến mãi (tùy chọn)"
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="datetime-local"
+                          value={toLocalInput(p.sale_end)}
+                          onChange={(e) => {
+                            const c = [...pkgs];
+                            c[i] = { ...p, sale_end: e.target.value || null };
+                            setPkgs(c);
+                          }}
+                          aria-label="Thời điểm kết thúc khuyến mãi (tùy chọn)"
+                        />
+                      </td>
+                      <td style={{ whiteSpace: "nowrap" }}>
+                        {onSale ? (
+                          <>
+                            <b style={{ color: "var(--gold, #ffd257)" }}>{fmt(p.sale_price)}</b>
+                            <br />
+                            <span className="chip chip-pending" style={{ fontSize: "0.7rem" }}>
+                              -{pct}%
+                            </span>
+                          </>
+                        ) : (
+                          fmt(p.price_vnd)
+                        )}
+                      </td>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={p.enabled === 1}
+                          onChange={(e) => {
+                            const c = [...pkgs];
+                            c[i] = { ...p, enabled: e.target.checked ? 1 : 0 };
+                            setPkgs(c);
+                          }}
+                          aria-label="Bật bán gói"
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
           <button className="btn btn-gold" onClick={savePackages} disabled={busy} style={{ marginTop: 12 }}>
-            💾 Lưu bảng giá
+            💾 Lưu bảng giá &amp; khuyến mãi
           </button>
         </div>
       )}
