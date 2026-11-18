@@ -4,6 +4,10 @@ import { getJarMeta } from "@/lib/jar-registry";
 
 export const metadata = { title: "Điều khoản sử dụng (EULA) — Đấu La Đại Lục" };
 
+/* FIX 18/11: thiếu force-dynamic → EULA phục vụ số bản prerendered cũ sau khi
+   admin nạp jar mới. Force dynamic để luôn đọc version jar đang host. */
+export const dynamic = "force-dynamic";
+
 /* Nội dung EULA.md — nguồn sự thật là file EULA.md ở gốc repo.
    Số bản hiển thị lấy từ plugin.yml của jar đang host (không hardcode). */
 export default async function EulaPage() {

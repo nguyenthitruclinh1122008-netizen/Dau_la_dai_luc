@@ -8,6 +8,12 @@ import JarChecksum from "@/components/JarChecksum";
 import { SOULS, SKILL_LABEL, COMMANDS } from "@/data/souls";
 import { getJarMeta } from "@/lib/jar-registry";
 
+/* FIX 18/11 (báo của chủ shop: upload jar mới mà tên file/version trang chủ
+   không tự đổi): trang chủ KHÔNG có cờ dynamic → Next prerender/cache HTML
+   cũ sau khi admin nạp jar mới. Bắt buộc force-dynamic để MỖI request đọc
+   lại version thật từ plugin.yml của jar đang host (DB jar_files). */
+export const dynamic = "force-dynamic";
+
 export default async function Home() {
   const v = (await getJarMeta("free"))?.version ?? "";
   return (
