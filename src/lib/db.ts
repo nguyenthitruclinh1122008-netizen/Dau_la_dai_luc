@@ -110,6 +110,21 @@ const SCHEMA_STATEMENTS = [
      ip         TEXT,
      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
    )`,
+  /* jar plugin đang host (admin nạp qua /api/admin/jar): version + tên file
+     đọc từ plugin.yml BÊN TRONG file jar — mọi nơi hiển thị đều lấy từ đây.
+     data giữ nguyên byte jar (Free ~0,4MB / Premium ~0,5MB, gọn hơn giới hạn
+     body 4,5MB của Vercel nhiều). */
+  `CREATE TABLE IF NOT EXISTS jar_files (
+     kind         TEXT PRIMARY KEY,
+     version      TEXT NOT NULL,
+     plugin_name  TEXT NOT NULL,
+     filename     TEXT NOT NULL,
+     sha256       TEXT NOT NULL,
+     size_bytes   INT  NOT NULL,
+     data         BYTEA NOT NULL,
+     uploaded_by  TEXT NOT NULL DEFAULT '',
+     uploaded_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+   )`,
 ];
 
 /* 5 gói giá cài sẵn (giống bộ SOULLAND-SHOP) — admin sửa được trong /admin

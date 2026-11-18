@@ -2,10 +2,9 @@
    Chỉ khách có ĐƠN ĐÃ DUYỆT + license còn hiệu lực mới tải được jar Premium.
    URL dò trực tiếp không có order hợp lệ → 403. */
 import { NextResponse } from "next/server";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { q, log } from "@/lib/db";
 import { isExpired } from "@/lib/keys";
+import { getJarBytes } from "@/lib/jar-registry";
 
 export const dynamic = "force-dynamic";
 
@@ -43,12 +42,18 @@ export async function GET(req: Request) {
         { status: 403 },
       );
     }
-    const buf = await readFile(path.join(process.cwd(), "assets", "jar", "DauLaDaiLuc-Premium.jar"));
-    await log("DOWNLOAD_PREMIUM_OK", code, ipOf(req));
-    return new Response(new Uint8Array(buf), {
+    /* Byte + TÊN FILE lấy từ jar đang host (admin nạp trong DB, chưa có thì bản
+       kèm repo) — version đọc từ plugin.yml bên trong jar, không hardcode. */
+    const j = await getJarBytes("premium");
+    if (!j) {
+      return NextResponse.json({ error: "File chưa được nạp" }, { status: 404 });
+    }
+    await log("DOWNLOAD_PREMIUM_OK", code + " → " + j.meta.filename, ipOf(req));
+    return new Response(new Uint8Array(j.buf), {
       headers: {
         "Content-Type": "application/java-archive",
-        "Content-Disposition": 'attachment; filename="DauLaDaiLuc-Premium.jar"',
+        "Content-Disposition": `attachment; filename="${j.meta.filename}"`,
+        "X-Jar-Version": j.meta.version,
         "Cache-Control": "no-store",
       },
     });

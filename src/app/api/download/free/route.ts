@@ -1,21 +1,23 @@
-/* GET /api/download/free — tải jar FREE (công khai cho mọi người) */
+/* GET /api/download/free — tải jar FREE (công khai cho mọi người).
+   Byte + TÊN FILE lấy từ jar đang host (bản admin nạp trong DB, chưa có thì
+   bản kèm repo); version đọc từ plugin.yml bên trong jar → sau khi nạp jar
+   mới, khách tải về đúng file "DauLaDaiLuc-Free-<version>.jar" tự động. */
 import { NextResponse } from "next/server";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
+import { getJarBytes } from "@/lib/jar-registry";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  try {
-    const buf = await readFile(path.join(process.cwd(), "assets", "jar", "DauLaDaiLuc-Free-3.16.0.jar"));
-    return new Response(new Uint8Array(buf), {
-      headers: {
-        "Content-Type": "application/java-archive",
-        "Content-Disposition": 'attachment; filename="DauLaDaiLuc-Free-3.16.0.jar"',
-        "Cache-Control": "public, max-age=3600",
-      },
-    });
-  } catch {
+  const j = await getJarBytes("free");
+  if (!j) {
     return NextResponse.json({ error: "File chưa được nạp" }, { status: 404 });
   }
+  return new Response(new Uint8Array(j.buf), {
+    headers: {
+      "Content-Type": "application/java-archive",
+      "Content-Disposition": `attachment; filename="${j.meta.filename}"`,
+      "X-Jar-Version": j.meta.version,
+      "Cache-Control": "no-store",
+    },
+  });
 }

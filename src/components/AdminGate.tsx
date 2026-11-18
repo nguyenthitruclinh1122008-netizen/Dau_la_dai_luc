@@ -59,6 +59,18 @@ interface Stats {
   rejected: number;
   revenue_vnd: number;
 }
+/* Jar plugin đang host — version/tên file đọc từ plugin.yml bên trong file jar */
+interface JarMeta {
+  kind: "free" | "premium";
+  version: string;
+  pluginName: string;
+  filename: string;
+  sha256: string;
+  sizeBytes: number;
+  uploadedBy: string | null;
+  uploadedAt: string | null;
+  source: "db" | "bundled";
+}
 
 const fmt = (n: number) => Number(n).toLocaleString("vi-VN") + "đ";
 const dt = (s: string | null) => (s ? new Date(s).toLocaleString("vi-VN") : "-");
@@ -69,7 +81,7 @@ export default function AdminGate() {
   const [pw, setPw] = useState("");
   const [loginErr, setLoginErr] = useState("");
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState<"orders" | "packages" | "bank" | "licenses" | "logs">("orders");
+  const [tab, setTab] = useState<"jar" | "orders" | "packages" | "bank" | "licenses" | "logs">("jar");
   const [msg, setMsg] = useState("");
 
   const [orders, setOrders] = useState<Order[]>([]);
@@ -78,6 +90,15 @@ export default function AdminGate() {
   const [bank, setBank] = useState({ bank_name: "", bank_account: "", bank_holder: "" });
   const [lics, setLics] = useState<Lic[]>([]);
   const [logs, setLogs] = useState<LogRow[]>([]);
+
+  /* Nạp jar plugin mới — web tự đọc version từ plugin.yml, không cần deploy lại */
+  const [jars, setJars] = useState<{ free: JarMeta | null; premium: JarMeta | null }>({
+    free: null,
+    premium: null,
+  });
+  const [upKind, setUpKind] = useState<"free" | "premium">("free");
+  const [upFile, setUpFile] = useState<File | null>(null);
+  const [jarBusy, setJarBusy] = useState(false);
 
   /* v3.5.0 — TẠO KEY TRỰC TIẾP (không cần đơn) */
   const [ckKind, setCkKind] = useState<"free" | "premium">("premium");
@@ -109,6 +130,10 @@ export default function AdminGate() {
     const r = await fetch("/api/admin/logs");
     if (r.ok) setLogs((await r.json()).logs || []);
   }, []);
+  const loadJars = useCallback(async () => {
+    const r = await fetch("/api/admin/jar");
+    if (r.ok) setJars((await r.json()).jars || { free: null, premium: null });
+  }, []);
 
   useEffect(() => {
     fetch("/api/admin/me")
@@ -124,8 +149,9 @@ export default function AdminGate() {
       loadBank();
       loadLics();
       loadLogs();
+      loadJars();
     }
-  }, [admin, loadOrders, loadPkgs, loadBank, loadLics, loadLogs]);
+  }, [admin, loadOrders, loadPkgs, loadBank, loadLics, loadLogs, loadJars]);
 
   const login = async () => {
     setBusy(true);
@@ -203,6 +229,30 @@ export default function AdminGate() {
       setMsg("❌ " + String((e as Error).message || e));
     } finally {
       setBusy(false);
+    }
+  };
+
+  /* Nạp jar mới: multipart POST → web tự đặt tên theo plugin.yml trong file */
+  const uploadJar = async () => {
+    if (!upFile) return;
+    setJarBusy(true);
+    setMsg("");
+    try {
+      const fd = new FormData();
+      fd.append("kind", upKind);
+      fd.append("file", upFile);
+      const r = await fetch("/api/admin/jar", { method: "POST", body: fd });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Nạp jar thất bại");
+      setMsg(
+        `✅ Đã nạp ${d.jar.filename} — web tự hiển thị v${d.jar.version}, khách tải về đúng tên file mới`,
+      );
+      setUpFile(null);
+      await loadJars();
+    } catch (e) {
+      setMsg("❌ " + String((e as Error).message || e));
+    } finally {
+      setJarBusy(false);
     }
   };
 
@@ -308,6 +358,9 @@ export default function AdminGate() {
       {msg && <div className="alert alert-ok">{msg}</div>}
 
       <div className="tabs">
+        <button className={tab === "jar" ? "on" : ""} onClick={() => setTab("jar")}>
+          📦 Jar plugin
+        </button>
         <button className={tab === "orders" ? "on" : ""} onClick={() => setTab("orders")}>
           🧾 Giao dịch ({stats?.pending ?? "?"} chờ)
         </button>
@@ -324,6 +377,66 @@ export default function AdminGate() {
           📜 Nhật ký
         </button>
       </div>
+
+      {tab === "jar" && (
+        <div className="card" style={{ marginBottom: 14 }}>
+          <h3 style={{ marginTop: 0 }}>📦 Jar plugin đang host</h3>
+          <p style={{ color: "var(--muted)", fontSize: "0.85rem", marginTop: -6 }}>
+            Tên file tải về + số version trên web <b>tự đọc từ plugin.yml bên trong file jar</b> — nạp jar mới là
+            trang chủ, nút tải, footer, EULA và link tải đổi theo ngay, không cần sửa code hay deploy lại.
+          </p>
+          <div className="grid grid-2">
+            {(["free", "premium"] as const).map((k) => {
+              const m = jars[k];
+              return (
+                <div key={k} className="card" style={{ margin: 0 }}>
+                  <b>{k === "free" ? "🆓 Bản FREE" : "💎 Bản PREMIUM"}</b>
+                  {m ? (
+                    <ul style={{ margin: "8px 0 0", paddingLeft: 18, fontSize: "0.88rem", lineHeight: 1.75 }}>
+                      <li>
+                        Tên tải về: <code className="mono">{m.filename}</code>
+                      </li>
+                      <li>
+                        Version (plugin.yml): <b>v{m.version}</b> · plugin <code>{m.pluginName || "?"}</code>
+                      </li>
+                      <li>Dung lượng: {(m.sizeBytes / 1024).toFixed(0)} KB</li>
+                      <li style={{ wordBreak: "break-all" }}>
+                        SHA-256: <span className="mono" style={{ fontSize: "0.72rem" }}>{m.sha256}</span>
+                      </li>
+                      <li>
+                        Nguồn:{" "}
+                        {m.source === "db"
+                          ? `nạp qua web bởi ${m.uploadedBy || "?"}${m.uploadedAt ? " · " + dt(m.uploadedAt) : ""}`
+                          : "bản kèm repo (chưa nạp qua web)"}
+                      </li>
+                    </ul>
+                  ) : (
+                    <p style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Chưa đọc được — nạp 1 file jar bên dưới.</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 14 }}>
+            <select value={upKind} onChange={(e) => setUpKind(e.target.value as "free" | "premium")} disabled={jarBusy}>
+              <option value="free">Nạp cho bản FREE</option>
+              <option value="premium">Nạp cho bản PREMIUM</option>
+            </select>
+            <input
+              type="file"
+              accept=".jar,application/java-archive"
+              onChange={(e) => setUpFile(e.target.files?.[0] || null)}
+              disabled={jarBusy}
+            />
+            <button className="btn btn-gold" onClick={uploadJar} disabled={jarBusy || !upFile}>
+              {jarBusy ? "Đang nạp..." : "⬆ Nạp jar mới"}
+            </button>
+          </div>
+          <p style={{ color: "var(--muted)", fontSize: "0.78rem", marginBottom: 0, marginTop: 10 }}>
+            File tối đa 4MB · phải là jar plugin hợp lệ (có plugin.yml ghi version) · nạp đè lên bản đang host.
+          </p>
+        </div>
+      )}
 
       {tab === "orders" && (
         <div className="card">
