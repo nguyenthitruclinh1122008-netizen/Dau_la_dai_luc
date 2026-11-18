@@ -66,7 +66,14 @@ export default function Home() {
           {SOULS.map((s) => (
             <article className="card soul-card" key={s.id} style={{ ["--soul-color" as string]: s.color }}>
               <div className="soul-head">
-                <span className="soul-dot" />
+                <img
+                  className="soul-thumb"
+                  src={`/img/vohon/${s.id}.webp`}
+                  alt={`Võ Hồn ${s.name}`}
+                  width={380}
+                  height={380}
+                  loading="lazy"
+                />
                 <h3 style={{ margin: 0 }}>{s.name}</h3>
                 <span className="chip" style={{ marginLeft: "auto", color: s.color, borderColor: s.color }}>
                   tỷ lệ {s.weight}/96

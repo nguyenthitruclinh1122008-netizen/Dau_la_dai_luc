@@ -141,6 +141,8 @@ code, .mono {
 .soul-card { border-top: 4px solid var(--soul-color, var(--gold)); position: relative; }
 .soul-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .soul-dot { width: 14px; height: 14px; border-radius: 50%; background: var(--soul-color, var(--gold)); box-shadow: 0 0 10px var(--soul-color, var(--gold)); }
+.soul-thumb { width: 56px; height: 56px; border-radius: 12px; object-fit: cover; border: 2px solid var(--soul-color, var(--gold)); box-shadow: 0 0 14px rgba(0, 0, 0, 0.35); flex-shrink: 0; }
+@media (max-width: 480px) { .soul-thumb { width: 48px; height: 48px; } }
 .soul-desc { color: var(--muted); font-size: 0.92rem; }
 .soul-meta { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; font-size: 0.85rem; color: var(--muted); }
 details.skill-list summary { cursor: pointer; color: var(--gold2); font-weight: 600; }
