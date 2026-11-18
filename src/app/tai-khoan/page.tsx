@@ -12,6 +12,7 @@ interface Me {
     contact: string | null;
     created_at: string;
     last_login: string | null;
+    vip?: boolean;
   } | null;
   gift_key?: string | null;
   gift_plan?: string | null;
@@ -77,6 +78,10 @@ export default function TaiKhoanPage() {
         <p>
           <span className="chip chip-lifetime">👑 QUẢN TRỊ VIÊN — chủ shop Đấu La Đại Lục</span>
         </p>
+      ) : me.user.vip ? (
+        <p>
+          <span className="chip chip-lifetime">💎 THÀNH VIÊN VIP — PREMIUM</span>
+        </p>
       ) : null}
       <p style={{ color: "var(--muted)" }}>
         Tạo lúc {fmtDate(me.user.created_at)} · đăng nhập gần nhất {fmtDate(me.user.last_login)}
@@ -114,24 +119,48 @@ export default function TaiKhoanPage() {
         )}
       </div>
 
-      <div className="card">
-        <h3>💎 Muốn lên PREMIUM?</h3>
-        <p style={{ color: "var(--muted)" }}>
-          Premium mở khóa đủ 9 Hồn Hoàn + Hồn Cốt + Võ Hồn Chân Thân. Mua tại{" "}
-          <Link href="/user">trang Mua Key</Link> (VietQR / thẻ cào) — admin duyệt xong key về ngay.
-        </p>
-        <div className="row">
-          <Link className="btn btn-gold btn-sm" href="/user">
-            💎 Mua Key Premium
-          </Link>
-          <a className="btn btn-ghost btn-sm" href="/api/download/free">
-            ⬇ Tải jar FREE
-          </a>
-          <button className="btn btn-red btn-sm" onClick={logout} disabled={busy}>
-            {busy ? "..." : "🚪 Đăng xuất"}
-          </button>
+      {me.user.vip ? (
+        <div className="card" style={{ borderColor: "rgba(255,200,61,.6)" }}>
+          <h3>💎 TÀI KHOẢN VIP — BẢN PREMIUM</h3>
+          <p style={{ color: "var(--muted)" }}>
+            Tài khoản này đang ở hạng <b>VIP</b>: tải plugin PREMIUM trực tiếp qua phiên đăng nhập của ngươi (không
+            cần đơn hàng) — mở khóa đủ 9 Hồn Hoàn + Hồn Cốt + Võ Hồn Chân Thân.
+          </p>
+          <div className="row">
+            <a className="btn btn-gold" href="/api/download/premium">
+              ⬇ TẢI PLUGIN PREMIUM
+            </a>
+            <span className="chip chip-lifetime">💎 VIP — vĩnh viễn</span>
+            <a className="btn btn-ghost btn-sm" href="/api/download/free">
+              ⬇ Tải jar FREE
+            </a>
+          </div>
+          <p style={{ color: "var(--muted)", fontSize: "0.9rem", marginTop: 10 }}>
+            Kích hoạt trong game cần KEY Premium — dùng key admin cấp khi nâng VIP cho ngươi (key chỉ hiện 1 lần lúc
+            cấp; mất thì liên hệ admin cấp lại).
+          </p>
         </div>
-      </div>
+      ) : (
+        <div className="card">
+          <h3>💎 Muốn lên PREMIUM?</h3>
+          <p style={{ color: "var(--muted)" }}>
+            Premium mở khóa đủ 9 Hồn Hoàn + Hồn Cốt + Võ Hồn Chân Thân. Mua tại{" "}
+            <Link href="/user">trang Mua Key</Link> (VietQR / thẻ cào) — admin duyệt xong key về ngay và tài khoản
+            tự thành VIP.
+          </p>
+          <div className="row">
+            <Link className="btn btn-gold btn-sm" href="/user">
+              💎 Mua Key Premium
+            </Link>
+            <a className="btn btn-ghost btn-sm" href="/api/download/free">
+              ⬇ Tải jar FREE
+            </a>
+            <button className="btn btn-red btn-sm" onClick={logout} disabled={busy}>
+              {busy ? "..." : "🚪 Đăng xuất"}
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }

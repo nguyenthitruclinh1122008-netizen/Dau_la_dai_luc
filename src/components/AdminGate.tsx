@@ -71,6 +71,18 @@ interface JarMeta {
   uploadedAt: string | null;
   source: "db" | "bundled";
 }
+/* Tài khoản thành viên — cờ VIP bật/tắt trong tab Tài khoản */
+interface U {
+  id: number;
+  username: string;
+  role: string;
+  vip: boolean;
+  vip_since: string | null;
+  contact: string | null;
+  gift_key: string | null;
+  created_at: string;
+  last_login: string | null;
+}
 
 const fmt = (n: number) => Number(n).toLocaleString("vi-VN") + "đ";
 const dt = (s: string | null) => (s ? new Date(s).toLocaleString("vi-VN") : "-");
@@ -81,7 +93,7 @@ export default function AdminGate() {
   const [pw, setPw] = useState("");
   const [loginErr, setLoginErr] = useState("");
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState<"jar" | "orders" | "packages" | "bank" | "licenses" | "logs">("jar");
+  const [tab, setTab] = useState<"jar" | "users" | "orders" | "packages" | "bank" | "licenses" | "logs">("jar");
   const [msg, setMsg] = useState("");
 
   const [orders, setOrders] = useState<Order[]>([]);
@@ -99,6 +111,10 @@ export default function AdminGate() {
   const [upKind, setUpKind] = useState<"free" | "premium">("free");
   const [upFile, setUpFile] = useState<File | null>(null);
   const [jarBusy, setJarBusy] = useState(false);
+
+  /* Tab Tài khoản — nâng/gỡ VIP từng thành viên */
+  const [users, setUsers] = useState<U[]>([]);
+  const [vipKey, setVipKey] = useState<string | null>(null); /* key Premium chỉ hiện 1 lần */
 
   /* v3.5.0 — TẠO KEY TRỰC TIẾP (không cần đơn) */
   const [ckKind, setCkKind] = useState<"free" | "premium">("premium");
@@ -134,6 +150,10 @@ export default function AdminGate() {
     const r = await fetch("/api/admin/jar");
     if (r.ok) setJars((await r.json()).jars || { free: null, premium: null });
   }, []);
+  const loadUsers = useCallback(async () => {
+    const r = await fetch("/api/admin/users");
+    if (r.ok) setUsers((await r.json()).users || []);
+  }, []);
 
   useEffect(() => {
     fetch("/api/admin/me")
@@ -150,8 +170,9 @@ export default function AdminGate() {
       loadLics();
       loadLogs();
       loadJars();
+      loadUsers();
     }
-  }, [admin, loadOrders, loadPkgs, loadBank, loadLics, loadLogs, loadJars]);
+  }, [admin, loadOrders, loadPkgs, loadBank, loadLics, loadLogs, loadJars, loadUsers]);
 
   const login = async () => {
     setBusy(true);
@@ -172,14 +193,14 @@ export default function AdminGate() {
     }
   };
 
-  const act = async (url: string, okMsg: string) => {
+  const act = async (url: string, okMsg: string | ((d: Record<string, unknown>) => string)) => {
     setBusy(true);
     setMsg("");
     try {
       const r = await fetch(url, { method: "POST" });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Thao tác lỗi");
-      setMsg(okMsg);
+      setMsg(typeof okMsg === "function" ? okMsg(d) : okMsg);
       await loadOrders();
       await loadLics();
     } catch (e) {
@@ -253,6 +274,36 @@ export default function AdminGate() {
       setMsg("❌ " + String((e as Error).message || e));
     } finally {
       setJarBusy(false);
+    }
+  };
+
+  /* Nâng/gỡ VIP cho 1 tài khoản — key Premium chỉ hiện đúng 1 lần khi nâng */
+  const toggleVip = async (u: U) => {
+    setBusy(true);
+    setMsg("");
+    try {
+      const r = await fetch("/api/admin/users/" + u.id + "/vip", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ on: !u.vip }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Lỗi đổi VIP");
+      if (d.vip && d.licenseKey) {
+        setVipKey(String(d.licenseKey));
+        setMsg("✅ Đã nâng VIP cho " + d.user + " — key Premium VĨNH VIỄN hiện bên dưới, copy gửi khách ngay");
+      } else if (d.vip) {
+        setVipKey(null);
+        setMsg("ℹ️ " + d.user + " đã là VIP từ trước — không cấp thêm key.");
+      } else {
+        setVipKey(null);
+        setMsg("↩ Đã gỡ VIP của " + d.user + " — thu hồi " + d.revokedKeys + " key VIP (key mua bằng đơn giữ nguyên).");
+      }
+      await loadUsers();
+    } catch (e) {
+      setMsg("❌ " + String((e as Error).message || e));
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -361,6 +412,9 @@ export default function AdminGate() {
         <button className={tab === "jar" ? "on" : ""} onClick={() => setTab("jar")}>
           📦 Jar plugin
         </button>
+        <button className={tab === "users" ? "on" : ""} onClick={() => setTab("users")}>
+          👥 Tài khoản
+        </button>
         <button className={tab === "orders" ? "on" : ""} onClick={() => setTab("orders")}>
           🧾 Giao dịch ({stats?.pending ?? "?"} chờ)
         </button>
@@ -438,6 +492,83 @@ export default function AdminGate() {
         </div>
       )}
 
+      {tab === "users" && (
+        <div className="card" style={{ marginBottom: 14 }}>
+          <h3 style={{ marginTop: 0 }}>👥 Tài khoản thành viên</h3>
+          <p style={{ color: "var(--muted)", fontSize: "0.85rem", marginTop: -6 }}>
+            <b>⬆ Nâng VIP</b> = bật hạng VIP + tự cấp 1 key Premium VĨNH VIỄN (chỉ hiện 1 lần) — khách thấy nút
+            "Tải Plugin PREMIUM" ở trang tài khoản và tải được jar Premium qua phiên của họ. <b>↩ Gỡ VIP</b> = thu hồi
+            đúng key VIP đã cấp, key khách MUA bằng đơn giữ nguyên. Duyệt đơn mua cũng tự gắn VIP khi liên hệ trên
+            đơn khớp username/contact của tài khoản.
+          </p>
+          {vipKey ? (
+            <div style={{ margin: "10px 0" }}>
+              <div className="key-box" style={{ userSelect: "all", textAlign: "center" }}>
+                {vipKey}
+              </div>
+              <p style={{ color: "var(--muted)", fontSize: "0.78rem", marginTop: 6 }}>
+                Key Premium của lần nâng vừa xong — copy gửi khách NGAY, load lại trang là mất (DB chỉ lưu băm).
+              </p>
+            </div>
+          ) : null}
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Tài khoản</th>
+                  <th>Vai trò</th>
+                  <th>Hạng</th>
+                  <th>Liên hệ</th>
+                  <th>Tạo lúc</th>
+                  <th>Đăng nhập gần nhất</th>
+                  <th>Thao tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u.id}>
+                    <td>
+                      <b>{u.username}</b>
+                    </td>
+                    <td>{u.role === "admin" ? "👑 admin" : "member"}</td>
+                    <td>
+                      {u.vip ? (
+                        <span className="chip chip-lifetime">💎 VIP</span>
+                      ) : (
+                        <span className="chip">thường</span>
+                      )}
+                    </td>
+                    <td>{u.contact || "—"}</td>
+                    <td>{dt(u.created_at)}</td>
+                    <td>{dt(u.last_login)}</td>
+                    <td>
+                      {u.role === "admin" ? (
+                        <span style={{ color: "var(--muted)", fontSize: "0.8rem" }}>—</span>
+                      ) : (
+                        <button
+                          className={u.vip ? "btn btn-red btn-sm" : "btn btn-gold btn-sm"}
+                          onClick={() => toggleVip(u)}
+                          disabled={busy}
+                        >
+                          {u.vip ? "↩ Gỡ VIP" : "⬆ Nâng VIP"}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {users.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ color: "var(--muted)" }}>
+                      Chưa có tài khoản nào.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {tab === "orders" && (
         <div className="card">
           <div className="table-wrap">
@@ -489,7 +620,13 @@ export default function AdminGate() {
                           <button
                             className="btn btn-green btn-sm"
                             disabled={busy}
-                            onClick={() => act("/api/admin/orders/" + o.code + "/confirm", "✅ Đã duyệt " + o.code + " — key cấp cho khách")}
+                            onClick={() =>
+                              act("/api/admin/orders/" + o.code + "/confirm", (d) => {
+                                let m = "✅ Đã duyệt " + o.code + " — key cấp cho khách";
+                                if (d.vip_granted) m += " · ĐÃ TỰ GẮN VIP cho tài khoản " + String(d.vip_granted);
+                                return m;
+                              })
+                            }
                           >
                             ✅ Duyệt &amp; cấp key
                           </button>{" "}

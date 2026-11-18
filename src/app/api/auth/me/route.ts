@@ -16,6 +16,7 @@ export async function GET(req: Request) {
         created_at: u.created_at,
         last_login: u.last_login,
         role: u.role,
+        vip: Number(u.vip) === 1,
       },
       gift_key: u.gift_key,
       gift_plan: u.gift_key ? "KEY BẢN THƯỜNG (FREE) — vĩnh viễn" : null,

@@ -86,6 +86,7 @@ export interface SessionUser {
   created_at: string;
   last_login: string | null;
   role: string; /* 'admin' = quản trị viên (duy nhất: TRUC_LINH), 'member' = người chơi */
+  vip: number; /* 1 = tài khoản VIP (tải Premium qua web + key VIP riêng), 0 = thường */
 }
 
 export function makeUserToken(userId: number, ttlMs = THIRTY_DAYS_MS): string {
@@ -133,7 +134,7 @@ export async function currentUser(req: Request): Promise<SessionUser | null> {
   const id = verifyUserToken(userCookieFrom(req));
   if (!id) return null;
   const rows = await q(
-    `SELECT id, username, contact, gift_key, created_at, last_login, role
+    `SELECT id, username, contact, gift_key, created_at, last_login, role, vip
        FROM users WHERE id=$1`,
     [id],
   );
@@ -147,7 +148,7 @@ export async function currentUserFromCookie(token?: string | null): Promise<Sess
     const id = verifyUserToken(token);
     if (!id) return null;
     const rows = await q(
-      `SELECT id, username, contact, gift_key, created_at, last_login, role
+      `SELECT id, username, contact, gift_key, created_at, last_login, role, vip
          FROM users WHERE id=$1`,
       [id],
     );

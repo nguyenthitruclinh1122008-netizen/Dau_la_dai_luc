@@ -98,6 +98,11 @@ const SCHEMA_STATEMENTS = [
   /* vai trò tài khoản: 'admin' = quản trị viên, 'member' = người chơi thường.
      ALTER IF NOT EXISTS để DB cũ (đã có bảng users) nâng cấp vô hại. */
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'member'`,
+  /* VIP web: 1 = tài khoản được nâng VIP (thấy + tải được jar Premium qua phiên
+     đăng nhập, tự cấp 1 key Premium vĩnh viễn khi nâng), 0 = thành viên thường.
+     Gắn/gỡ trong /admin tab Tài khoản; duyệt đơn mua cũng tự gắn khi khớp tài khoản. */
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS vip INT NOT NULL DEFAULT 0`,
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS vip_since TIMESTAMPTZ`,
   `CREATE TABLE IF NOT EXISTS ratings (
      id         SERIAL PRIMARY KEY,
      score      INT NOT NULL,

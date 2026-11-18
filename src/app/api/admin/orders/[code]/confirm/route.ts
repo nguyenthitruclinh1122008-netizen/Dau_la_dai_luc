@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { q, log } from "@/lib/db";
 import { genShopKey, expiryDateForDays, LIFETIME_DATE } from "@/lib/keys";
+import { findUserByOrderContact, grantVip } from "@/lib/vip";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ export async function POST(
     const upd = await q(
       `UPDATE orders SET status='approved', decided_at=now()
         WHERE code=$1 AND status='pending'
-        RETURNING code, buyer_name, package_code`,
+        RETURNING code, buyer_name, buyer_contact, package_code`,
       [orderCode],
     );
     if (upd.length === 0) {
@@ -68,6 +69,21 @@ export async function POST(
     await q(`UPDATE orders SET license_id=$2 WHERE code=$1`, [order.code, lic[0].id]);
     await log("ORDER_CONFIRM", order.code + " → key " + key.slice(0, 24) + "… · hạn " + expiry, ipOf(req));
 
+    /* 4) TỰ GẮN VIP cho tài khoản web khớp thông tin liên hệ trên đơn (so
+       username HOẶC contact, không phân biệt hoa-thường) — admin duyệt đơn
+       1 lần bấm là khách vừa có key vừa thành VIP, không cần bấm 2 lần.
+       Không khớp tài khoản nào / là admin → bỏ qua (vẫn duyệt đơn bình thường). */
+    let vipGranted: string | null = null;
+    try {
+      const acc = await findUserByOrderContact(String(order.buyer_contact || ""));
+      if (acc && acc.role !== "admin") {
+        const g = await grantVip(acc.id, ipOf(req));
+        if (!g.vipAlready) vipGranted = g.user;
+      }
+    } catch {
+      /* lỗi gắn VIP không làm gãy việc duyệt đơn — admin gắn tay sau */
+    }
+
     return NextResponse.json({
       ok: true,
       order_code: order.code,
@@ -76,6 +92,7 @@ export async function POST(
       license_key: key,
       expires_at: expiry,
       lifetime: pkg.days === 0,
+      vip_granted: vipGranted,
     });
   } catch (e) {
     return NextResponse.json({ error: "Lỗi duyệt đơn", detail: String(e).slice(0, 200) }, { status: 500 });
