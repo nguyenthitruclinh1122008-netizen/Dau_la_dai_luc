@@ -3,6 +3,7 @@ import Link from "next/link";
 import Rating from "./rating";
 import KeyCheck from "@/components/KeyCheck";
 import PriceTable from "@/components/PriceTable";
+import JarChecksum from "@/components/JarChecksum";
 import { SOULS, SKILL_LABEL, COMMANDS } from "@/data/souls";
 
 export default function Home() {
@@ -25,6 +26,7 @@ export default function Home() {
             🎁 Đăng ký nhận KEY THƯỜNG
           </Link>
         </div>
+        <JarChecksum />
         <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
           Hỗ trợ:{" "}
           <a href="https://discord.gg/uNDvZ38TC" target="_blank" rel="noreferrer">
