@@ -74,6 +74,43 @@ export default async function Home() {
         <p style={{ color: "var(--muted)", textAlign: "center", marginTop: -6 }}>
           Đúng nguyên văn trong game — mỗi Võ Hồn có 9 Hồn Kỹ, lĩnh ngộ đủ sẽ mở Võ Hồn Chân Thân.
         </p>
+
+        {/* 24/11/2026: bảng tổng quan 9 Võ Hồn theo tài liệu nội dung game */}
+        <div className="table-wrap" style={{ margin: "18px 0 26px" }}>
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Võ Hồn</th>
+                <th>Loại / mô tả</th>
+                <th>Tỷ lệ thức tỉnh</th>
+                <th>Vật chủ động (buff bị động)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {SOULS.map((s, i) => (
+                <tr key={s.id}>
+                  <td>{i + 1}</td>
+                  <td>
+                    <b style={{ color: s.color }}>{s.name}</b>
+                  </td>
+                  <td style={{ color: "var(--muted)" }}>{s.description}</td>
+                  <td>{s.weight}/96</td>
+                  <td style={{ color: "var(--muted)" }}>{s.passiveLabel}</td>
+                </tr>
+              ))}
+              <tr>
+                <td colSpan={3}>
+                  <b>Tổng tỷ lệ thức tỉnh</b>
+                </td>
+                <td>
+                  <b>96/96</b>
+                </td>
+                <td />
+              </tr>
+            </tbody>
+          </table>
+        </div>
         <div className="grid grid-2">
           {SOULS.map((s) => (
             <article className="card soul-card" key={s.id} style={{ ["--soul-color" as string]: s.color }}>
@@ -104,7 +141,14 @@ export default async function Home() {
                       <span style={{ color: "var(--muted)" }}> — {SKILL_LABEL[k.type] || k.type}</span>
                     </span>
                     <span className="meta">
-                      {k.damage ? `${k.damage} sát thương · ` : ""}
+                      {/* 24/11/2026: kỹ Trị liệu/Hồi hồn lực hiển thị "lượng hồi" thay vì "sát thương" */}
+                      {k.damage
+                        ? k.type === "HEAL"
+                          ? `hồi ${k.damage} máu · `
+                          : k.type === "MANA"
+                            ? `hồi ${k.damage} hồn lực · `
+                            : `${k.damage} sát thương · `
+                        : ""}
                       {k.radius ? `bán kính ${k.radius} · ` : ""}
                       {k.duration ? `${k.duration}s · ` : ""}
                       {k.cost} hồn lực · hồi {k.cooldown}s
@@ -117,10 +161,36 @@ export default async function Home() {
         </div>
       </section>
 
+      {/* 24/11/2026: quy luật chung của Hồn Kỹ theo tài liệu nội dung game */}
+      <section className="card">
+        <h2>📏 Quy luật chung của Hồn Kỹ</h2>
+        <ul style={{ color: "var(--muted)" }}>
+          <li>
+            Hồn Kỹ số <b>7</b> của mọi Võ Hồn là <b>Võ Hồn Chân Thân</b>: kéo dài 25s, tốn 80 Hồn lực, hồi chiêu 90s.
+          </li>
+          <li>
+            Hồn Kỹ số <b>9</b> là tuyệt chiêu mạnh nhất: tốn 140–150 Hồn lực, hồi chiêu 90–100s.
+          </li>
+          <li>
+            Mỗi Võ Hồn có <b>9 Hồn Kỹ</b> — 9 Võ Hồn x 9 kỹ = tổng cộng <b>81 Hồn Kỹ</b> trong game.
+          </li>
+        </ul>
+      </section>
+
       <section className="card">
         <h2>📜 Lệnh trong game</h2>
+        <p style={{ color: "var(--muted)", marginTop: -6 }}>
+          Tất cả lệnh bắt đầu bằng <code>/dl</code>. Cột "Ai dùng" cho biết lệnh dành cho ai.
+        </p>
         <div className="table-wrap">
           <table>
+            <thead>
+              <tr>
+                <th>Lệnh</th>
+                <th>Chức năng</th>
+                <th>Ai dùng</th>
+              </tr>
+            </thead>
             <tbody>
               {COMMANDS.map((c) => (
                 <tr key={c.cmd}>
@@ -128,10 +198,30 @@ export default async function Home() {
                     <code>{c.cmd}</code>
                   </td>
                   <td style={{ color: "var(--muted)" }}>{c.desc}</td>
+                  <td style={{ color: "var(--muted)" }}>{c.who}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+        <p style={{ color: "var(--muted)", fontSize: "0.85rem", marginTop: 10 }}>
+          Permission chi tiết của từng lệnh nằm trong file <code>plugin.yml</code> bên trong jar.
+        </p>
+      </section>
+
+      {/* 24/11/2026: mục Hồn Hoàn & Hồn Lực theo tài liệu nội dung game */}
+      <section className="card">
+        <h2>🔮 Hồn Hoàn & Hồn Lực</h2>
+        <p style={{ color: "var(--muted)" }}>
+          Sau khi thức tỉnh, Hồn Sư hấp thụ <b>Hồn Hoàn</b> và <b>Hồn Cốt</b> để tăng sức mạnh. Bản FREE giới hạn số Hồn
+          Hoàn — bản <b>PREMIUM mở khóa đủ 9 Hồn Hoàn + Hồn Cốt + Võ Hồn đỉnh cao</b>.
+        </p>
+        <p style={{ color: "var(--muted)" }}>
+          Tu luyện Hồn Lực tại Minh Tưởng bằng lệnh <code>/dl tuluyen</code>.
+        </p>
+        <div className="alert alert-warn">
+          📋 Bảng chi tiết Hồn Hoàn (màu/cấp bậc, tỷ lệ rơi, chỉ số theo cấp) và công thức Hồn Lực đang được cập nhật
+          theo bản 3.16.8 — sẽ bổ sung đầy đủ ở bản wiki kế tiếp.
         </div>
       </section>
 

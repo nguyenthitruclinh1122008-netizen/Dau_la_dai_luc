@@ -232,16 +232,19 @@ export const SOULS: Soul[] = [
   },
 ];
 
-/* Lệnh trong game (đã trích nguyên văn từ jar v2.1.1) */
-export const COMMANDS: { cmd: string; desc: string }[] = [
-  { cmd: "/dl", desc: "Bảng thông tin Hồn Sư của ngươi" },
-  { cmd: "/dl thuctinh", desc: "Thức tỉnh Võ Hồn (1 lần duy nhất)" },
-  { cmd: "/dl vohon", desc: "Triệu hồi / thu hồi Võ Hồn (Shift + F)" },
-  { cmd: "/dl skill <1-9>", desc: "Thi triển Hồn Kỹ (Shift + click đổi kỹ)" },
-  { cmd: "/dl tuluyen", desc: "Minh Tưởng tu luyện để tăng Hồn Lực" },
-  { cmd: "/dl danhsach", desc: "Danh sách Võ Hồn có trong game" },
-  { cmd: "/dl top", desc: "Bảng xếp hạng Hồn Sư toàn server" },
-  { cmd: "/dl info <tên>", desc: "Xem thông tin người khác" },
-  { cmd: "/dl admin", desc: "Lệnh quản trị (set võ hồn, tặng Hồn Hoàn, triệu hồi Hồn Thú...)" },
-  { cmd: "/dl license", desc: "Trạng thái license bản Premium" },
+/* Lệnh trong game (đã trích nguyên văn từ jar v2.1.1)
+   24/11/2026: thêm cột "Ai dùng" + lệnh /dl license activate <KEY>
+   theo tài liệu nội dung game — đủ 11 lệnh, khớp wiki 100%. */
+export const COMMANDS: { cmd: string; desc: string; who: string }[] = [
+  { cmd: "/dl", desc: "Bảng thông tin Hồn Sư của ngươi", who: "Người chơi" },
+  { cmd: "/dl thuctinh", desc: "Thức tỉnh Võ Hồn (1 lần duy nhất)", who: "Người chơi" },
+  { cmd: "/dl vohon", desc: "Triệu hồi / thu hồi Võ Hồn (Shift + F)", who: "Người chơi" },
+  { cmd: "/dl skill <1-9>", desc: "Thi triển Hồn Kỹ (Shift + click đổi kỹ)", who: "Người chơi" },
+  { cmd: "/dl tuluyen", desc: "Minh Tưởng tu luyện để tăng Hồn Lực", who: "Người chơi" },
+  { cmd: "/dl danhsach", desc: "Danh sách Võ Hồn có trong game", who: "Người chơi" },
+  { cmd: "/dl top", desc: "Bảng xếp hạng Hồn Sư toàn server", who: "Người chơi" },
+  { cmd: "/dl info <tên>", desc: "Xem thông tin người khác", who: "Người chơi" },
+  { cmd: "/dl admin", desc: "Lệnh quản trị (set võ hồn, tặng Hồn Hoàn, triệu hồi Hồn Thú...)", who: "Admin" },
+  { cmd: "/dl license", desc: "Trạng thái license bản Premium", who: "Admin / chủ server" },
+  { cmd: "/dl license activate <KEY>", desc: "Kích hoạt key Premium (kiểm tra OFFLINE)", who: "Admin / chủ server" },
 ];
