@@ -228,10 +228,11 @@ module.exports = async (req, res) => {
         S.jarLog.unshift({id: C.uid('JL'), at: C.vnStr(), by: me.username, act: 'upload', pkg, version: ver, releaseId: rel.id, fileName: file.fileName, size: buf.length, sha256: sha});
         if(S.jarLog.length > 200) S.jarLog.length = 200;
         O.notify(st, 'admins', 'jar', 'Đã upload jar ' + pkg.toUpperCase() + ' v' + ver, me.username + ' upload ' + file.fileName + ' (' + (buf.length/1024).toFixed(0) + 'KB) — SHA-256 ' + sha.slice(0, 12) + '… — trở thành bản mới nhất của gói ' + pkg.toUpperCase() + '.');
-        /* dọn phần tạm (nếu upload theo phần) */
+        /* dọn phần tạm — chỉ xóa đúng các phần đã biết (không LIST: LIST là Advanced ops trên Blob) */
         const uidv = C.cleanStr(meta.uid, 40);
         if(/^[a-f0-9]{12,40}$/.test(uidv)){
-          try{ const ps = await C.blobList('tmp/jar/' + uidv + '/'); for(const p of ps) await C.blobDelete(p.pathname); }catch(e){}
+          const np = C.clampInt(meta.parts, 1, 40, 1);
+          for(let i = 0; i < np; i++){ try{ await C.blobDelete('tmp/jar/' + uidv + '/part-' + String(i).padStart(2, '0')); }catch(e){} }
         }
         return {ok:true, msg:'⬆ Đã tải lên ' + file.fileName + ' (' + (buf.length/1024).toFixed(1) + 'KB) — gói ' + pkg.toUpperCase() + ' phiên bản v' + ver + ' — SHA-256: ' + sha + ' — đây là bản MỚI NHẤT của gói này.', release: {id: rel.id, pkg, version: ver, size: buf.length, sha256: sha}};
       }
@@ -246,20 +247,20 @@ module.exports = async (req, res) => {
         const uidv = C.cleanStr(body.uid, 40);
         if(!/^[a-f0-9]{12,40}$/.test(uidv)) return {out: {ok:false, msg:'Mã phiên upload không hợp lệ.'}};
         const parts = C.clampInt(body.parts, 1, 40, 1);
-        const blobs = await C.blobList('tmp/jar/' + uidv + '/');
-        const byIdx = new Map();
-        for(const b of blobs){ const m = String(b.pathname || '').match(/part-(\d+)$/); if(m) byIdx.set(parseInt(m[1], 10), b.url); }
+        /* ghép phần theo ĐƯỜNG DẪN XÁC ĐỊNH (part-00, part-01…) — KHÔNG LIST:
+           LIST là Advanced ops (nguyên nhân store Blob bị khóa quota — 25/11/2026) */
         const chunks = [];
         let total = 0;
         for(let i = 0; i < parts; i++){
-          const url = byIdx.get(i);
-          if(!url) return {out: {ok:false, msg:'Thiếu phần ' + i + ' — tải lại phần đó rồi bấm hoàn tất.'}};
-          const ch = await C.blobGetRaw(url, 45000);
+          const path = 'tmp/jar/' + uidv + '/part-' + String(i).padStart(2, '0');
+          let ch;
+          try{ ch = await C.blobGetRaw(path, 45000); }
+          catch(e){ return {out: {ok:false, msg:'Thiếu phần ' + i + ' — tải lại phần đó rồi bấm hoàn tất.'}}; }
           if(total + ch.length > JAR_MAX) return {out: {ok:false, msg:'File vượt giới hạn 80MB.'}};
           chunks.push(ch); total += ch.length;
         }
         const buf = Buffer.concat(chunks, total);
-        const r = await finalizeJar(me, buf, {pkg: body.pkg, version: body.version, changelog: body.changelog, fileName: body.fileName, uid: uidv});
+        const r = await finalizeJar(me, buf, {pkg: body.pkg, version: body.version, changelog: body.changelog, fileName: body.fileName, uid: uidv, parts});
         return {out: r};
       }
       if(act === 'jar-latest'){

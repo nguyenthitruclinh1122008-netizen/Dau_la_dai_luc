@@ -33,10 +33,23 @@ function cleanStr(s, max){
   return String(s == null ? '' : s).trim().slice(0, max || 500);
 }
 
-/* ---------- Blob store (database) ---------- */
+/* ---------- kho dữ liệu: POSTGRES hoặc BLOB (chọn TỰ ĐỘNG theo env) ----------
+   25/11/2026 — SỬA GỐC RỄ QUOTA BLOB (store daula-shop bị suspend vì vượt
+   "Advanced Operations" 2,2k/2k của gói Hobby):
+   · Kiến trúc CŨ: mỗi lần ĐỌC state = LIST + GET, mỗi lần GHI = LIST + PUT + LIST (+DELETE dọn) —
+     LIST/DELETE tính Advanced ops, quota 2k/tháng → vài chục thao tác test là treo store.
+   · Chế độ POSTGRES (mới — ưu tiên nếu có DATABASE_URL): state nằm 1 dòng jsonb trong schema
+     `v2beta` (RIÊNG TUYỆT với schema public của web chính — mọi câu lệnh đều gọi bảng đủ tên
+     `v2beta.*`, không bao giờ đụng dữ liệu Production). File jar/ảnh lưu bytea cùng schema.
+   · Chế độ BLOB (mới — không có DATABASE_URL): state nằm 1 pathname CỐ ĐỊNH db/state.json:
+     ĐỌC = GET qua CDN (miễn phí, không tính op), GHI = 1 PUT (Simple op). KHÔNG LIST, không
+     tự DELETE → không bao giờ chạm Advanced ops; quota 10k Simple ops/tháng ≈ 300 ghi/ngày. */
 const BLOB_TOKEN = process.env.BLOB_READ_WRITE_TOKEN || '';
 const STATE_PATH = 'db/daula-state-v1.json';
-const BLOB_API = 'https://blob.vercel-storage.com';
+const BLOB_API = process.env.BLOB_API_BASE || 'https://blob.vercel-storage.com';
+const DRIVER = (/^postgres(ql)?:\/\//.test(String(process.env.DATABASE_URL || ''))) ? 'postgres' : 'blob';
+const pg = DRIVER === 'postgres' ? require('./pg.js') : null;
+if(pg) pg.init(process.env.DATABASE_URL);
 
 /* FIX 24/11/2026 — NGUYÊN NHÂN TRANG TRẮNG (chẩn đoán trên BETA thật): fetch() trần đến
    Blob đôi khi treo vĩnh viễn (network stall) → lambda không bao giờ trả response →
@@ -56,29 +69,127 @@ async function blobFetch(path, opts){
   }), BLOB_TIMEOUT);
   return r;
 }
-async function blobPut(pathname, data, contentType){
-  const r = await blobFetch('/' + pathname, {
+
+/* ============ CHẾ ĐỘ POSTGRES (schema v2beta) ============ */
+function validState(st){
+  return st && Array.isArray(st.users) && st.settings && st.settings.adminGate;
+}
+async function pgEnsure(){ await pg.ensureSchema(); }
+/* migrate 1 lần: nếu bảng state trống → thử đọc state cũ trên Blob (best effort 1 lần/instance) */
+let _pgMigrated = false;
+async function pgGetState(){
+  await pgEnsure();
+  const r = await pg.query('SELECT doc FROM v2beta.state WHERE id = 1', []);
+  if(r.rows.length){
+    const doc = typeof r.rows[0].doc === 'string' ? JSON.parse(r.rows[0].doc) : r.rows[0].doc;   /* jsonb về dạng text */
+    if(validState(doc)) return doc;
+  }
+  if(!_pgMigrated){
+    _pgMigrated = true;
+    try{
+      const leg = await blobLegacyReadLatest();
+      if(leg && validState(leg.st)){
+        await pg.query('INSERT INTO v2beta.state (id, doc, rev) VALUES (1, $1::jsonb, $2) ON CONFLICT (id) DO NOTHING',
+          [JSON.stringify(leg.st), String(Math.max(1, leg.st.rev || leg.rev || 1))]);
+        return leg.st;
+      }
+    }catch(e){ /* Blob đang suspend / không có state cũ — dùng seed */ }
+  }
+  const st = seedState();
+  st.rev = 1;
+  await pg.query('INSERT INTO v2beta.state (id, doc, rev) VALUES (1, $1::jsonb, 1) ON CONFLICT (id) DO NOTHING', [JSON.stringify(st)]);
+  const r2 = await pg.query('SELECT doc FROM v2beta.state WHERE id = 1', []);
+  if(r2.rows.length){ const d2 = typeof r2.rows[0].doc === 'string' ? JSON.parse(r2.rows[0].doc) : r2.rows[0].doc; if(validState(d2)) return d2; }
+  return st;
+}
+async function pgWithState(mutator, tries){
+  await pgEnsure();
+  const n = tries || 6;
+  for(let i = 0; i < n; i++){
+    const base = await pg.query('SELECT doc, rev FROM v2beta.state WHERE id = 1', []);
+    let st, rev;
+    if(base.rows.length){
+      st = typeof base.rows[0].doc === 'string' ? JSON.parse(base.rows[0].doc) : base.rows[0].doc;
+      rev = Number(base.rows[0].rev) || 1;
+    }
+    if(st && validState(st)){ /* dùng st, rev */ }
+    else{
+      st = await pgGetState(); rev = Math.max(1, st.rev || 1);
+    }
+    const result = await mutator(st);
+    const next = (result && result.next) ? result.next : st;
+    next.rev = rev + 1;
+    const upd = await pg.query('UPDATE v2beta.state SET doc = $1::jsonb, rev = $2, updated = now() WHERE id = 1 AND rev = $3',
+      [JSON.stringify(next), String(rev + 1), String(rev)]);
+    if(upd.rowCount >= 1) return (result && result.out !== undefined) ? result.out : {state: next};
+    /* có người ghi song song — làm lại từ bản mới nhất */
+  }
+  throw new Error('Kho dữ liệu bận — thử lại sau vài giây.');
+}
+async function pgPutFileRaw(path, buf, contentType){
+  await pgEnsure();
+  await pg.query('INSERT INTO v2beta.files (path, data, ctype, size, updated) VALUES ($1, $2, $3, $4, now()) ' +
+    'ON CONFLICT (path) DO UPDATE SET data = EXCLUDED.data, ctype = EXCLUDED.ctype, size = EXCLUDED.size, updated = now()',
+    [path, buf, contentType || 'application/octet-stream', String(buf.length)]);
+  return '/api/file?p=' + encodeURIComponent(path);
+}
+async function pgGetRawByPath(path, ms){
+  await pgEnsure();
+  const r = await pg.query('SELECT data, ctype FROM v2beta.files WHERE path = $1', [path]);
+  if(!r.rows.length) throw new Error('File không tồn tại: ' + path);
+  return r.rows[0].data;
+}
+async function pgDeleteRaw(path){
+  await pgEnsure();
+  await pg.query('DELETE FROM v2beta.files WHERE path = $1', [path]);
+  return true;
+}
+async function pgListRaw(prefix){
+  await pgEnsure();
+  const r = await pg.query('SELECT path FROM v2beta.files WHERE path LIKE $1 ORDER BY path', [prefix.replace(/[%_]/g, '\\$&') + '%']);
+  return r.rows.map(x => x.path);
+}
+
+/* ============ CHẾ ĐỘ BLOB — chỉ Simple ops (PUT/GET), KHÔNG LIST ============ */
+const STATE_FIXED = 'db/state.json';
+let _legacyChecked = false;
+/* chỉ dùng cho MIGRATE 1 lần khi db/state.json chưa tồn tại — đọc state cũ kiểu pathname-đuổi */
+async function blobLegacyReadLatest(){
+  const revs = await listRevs();
+  for(let i = revs.length - 1; i >= 0; i--){
+    try{
+      const st = await fetchUrl(revs[i].url);
+      if(validState(st)) return {st, rev: Math.max(1, st.rev || revs[i].key % 1e8)};
+    }catch(e){ /* file này chưa propagate / bị mất — thử file liền dưới */ }
+  }
+  return null;
+}
+async function blobGetFixed(tries){
+  const busted = BLOB_API + '/' + STATE_FIXED + '?r=' + nowMs() + crypto.randomBytes(4).toString('hex');
+  const n = tries || 2;
+  let lastErr = null;
+  for(let i = 0; i < n; i++){
+    try{
+      const r = await fetchT(busted, undefined, BLOB_TIMEOUT);
+      if(r.ok) return JSON.parse(await r.text());
+      if(r.status === 404 || r.status === 410) return null;
+      lastErr = new Error('Blob GET state -> ' + r.status);
+    }catch(e){ lastErr = e; }
+    await sleep(300 * (i + 1));
+  }
+  throw lastErr || new Error('Blob GET state thất bại');
+}
+async function blobPutFixed(doc){
+  const r = await blobFetch('/' + STATE_FIXED, {
     method: 'PUT',
-    headers: {
-      'x-add-random-suffix': '0',
-      'x-content-type': contentType || 'application/octet-stream'
-    },
-    body: data
+    headers: {'x-add-random-suffix': '0', 'x-content-type': 'application/json'},
+    body: JSON.stringify(doc)
   });
-  if(!r.ok){ throw new Error('Blob PUT ' + pathname + ' -> ' + r.status); }
-  return r.json();
+  if(!r.ok) throw new Error('Blob PUT state -> ' + r.status);
+  return true;
 }
-async function blobDelete(pathname){
-  try{
-    const r = await blobFetch('/' + pathname, {method: 'DELETE'});
-    return r.ok;
-  }catch(e){ return false; }
-}
-/* đọc state KHÔNG ghi — mỗi lần ghi 1 pathname DUY NHẤT (không tái sử dụng tên, tránh metadata lag
-   của origin với file đã-xoá-rồi-tạo-lại) + LIST API (không cache) làm directory */
+/* đọc state KHÔNG ghi — sort key cho file state kiểu legacy (state-r00NN / state-<ms><rand>) */
 const STATE_DIR = 'db';
-/* sort key: state-r00NN (định dạng cũ) → rev; state-<13 số ms><rand hex> → 1e15 + ts (luôn mới hơn rev cũ).
-   CHÚ Ý: bắt ĐÚNG 13 chữ số timestamp (không greedy) — random hex khởi đầu bằng số làm regex \d{13,} nuốt nhầm */
 function stateKey(pathname){
   let m = pathname.match(/state-r(\d+)\.json$/);
   if(m) return parseInt(m[1], 10);
@@ -118,83 +229,123 @@ async function fetchUrl(url, tries){
       lastErr = new Error('Blob GET ' + url.slice(-30) + ' -> ' + r.status);
       if(r.status !== 404 && r.status !== 410) throw lastErr;
     }catch(e){ lastErr = e; }
-    await new Promise(res => setTimeout(res, 350 * (i + 1)));
+    await sleep(350 * (i + 1));
   }
   throw lastErr || new Error('Blob GET thất bại');
 }
-function validState(st){
-  return st && Array.isArray(st.users) && st.settings && st.settings.adminGate;
-}
-async function readLatestState(){
-  const revs = await listRevs();
-  /* đọc từ file MỚI NHẤT lùi dần: file top có sự cố thì dùng file cũ hơn — không bao giờ hard-fail */
-  for(let i = revs.length - 1; i >= 0; i--){
+async function blobReadLatestState(){
+  let err1 = null, err2 = null, leg = null;
+  let fixed = null;
+  try{ fixed = await blobGetFixed(); }catch(e){ err1 = e; }
+  if(fixed && validState(fixed)) return {st: fixed, rev: Math.max(1, fixed.rev || 1)};
+  /* migrate legacy — chỉ dò LIST đúng 1 lần mỗi instance (tránh đốt quota Advanced ops) */
+  if(!_legacyChecked){
+    _legacyChecked = true;
     try{
-      const st = await fetchUrl(revs[i].url);
-      if(validState(st)) return {st, rev: Math.max(1, st.rev || revs[i].key % 1e8)};
-    }catch(e){ /* file này chưa propagate / bị mất — thử file liền dưới */ }
-  }
-  /* migrate: đọc file legacy nếu có */
-  try{
-    const r = await fetchT(BLOB_API + '?limit=50&prefix=' + encodeURIComponent(STATE_DIR + '/daula-state-v1'), {headers: {authorization: 'Bearer ' + BLOB_TOKEN}}, BLOB_TIMEOUT);
-    if(r.ok){
-      const d = await r.json();
-      const leg = (d.blobs || []).find(b => b.pathname === STATE_DIR + '/daula-state-v1.json');
-      if(leg){
-        const st = await fetchUrl(leg.url);
-        if(validState(st)) return {st, rev: Math.max(1, st.rev || 0)};
+      leg = await blobLegacyReadLatest();
+      if(leg && validState(leg.st)){
+        await blobPutFixed(leg.st);       /* chép sang pathname cố định — từ đây không LIST nữa */
+        return leg;
       }
-    }
-  }catch(e){}
-  return {st: seedState(), rev: 0};
+    }catch(e){ err2 = e; /* store suspend / chưa có state cũ */ }
+  }
+  /* 25/11/2026: nếu KHÔNG đọc được state vì LỖI KHO (vd store bị khóa quota) → NÉM để
+     /api/state trả cờ degraded (banner bảo trì) — KHÔNG trả seed lặng lẽ làm khách tưởng chạy bình thường */
+  if(!leg && (err1 || err2)) throw (err1 || err2);
+  return null;
 }
 async function getState(){
-  const r = await readLatestState();
-  return r.st;
+  if(DRIVER === 'postgres') return pgGetState();
+  const r = await blobReadLatestState();
+  return r ? r.st : seedState();
 }
-/* state doc CAS: đọc bản mới nhất -> mutate -> ghi file pathname DUY NHẤT -> list xác nhận mình là top */
+/* state doc CAS: đọc bản mới nhất -> mutate -> ghi -> xác nhận rev của mình còn ở top */
 async function withState(mutator, tries){
-  const n = tries || 6;
+  if(DRIVER === 'postgres') return pgWithState(mutator, tries);
+  const n = tries || 5;
   for(let i = 0; i < n; i++){
-    const base = await readLatestState();
-    const st = validState(base.st) ? base.st : seedState();
-    const result = await mutator(st);           // mutate trực tiếp hoặc return {next, out} (có thể async)
+    const base = await blobReadLatestState();
+    const st = base && validState(base.st) ? base.st : seedState();
+    const rev = base ? base.rev : 0;
+    const result = await mutator(st);
     const next = (result && result.next) ? result.next : st;
-    next.rev = base.rev + 1;
-    const path = STATE_DIR + '/state-' + Date.now() + crypto.randomBytes(4).toString('hex') + '.json';
-    await blobPut(path, JSON.stringify(next), 'application/json');
-    const revs = await listRevs();
-    const topKey = revs.length ? revs[revs.length - 1].key : 0;
-    const myKey = stateKey(path);
-    if(topKey > myKey) continue;                /* có người ghi file mới hơn song song -> làm lại */
-    /* dọn file cũ (giữ 14 file gần nhất, chỉ dọn khi > 20) — best effort */
-    if(revs.length > 20){
-      const oldUrls = revs.slice(0, revs.length - 14).map(x => x.url);
-      try{ await blobFetch('/delete', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({urls: oldUrls})}); }catch(e){}
-    }
-    return (result && result.out !== undefined) ? result.out : {state: next};
+    next.rev = rev + 1;
+    await blobPutFixed(next);
+    /* xác nhận: đọc lại — rev của mình còn top thì xong; người khác ghi đè giữa chừng thì làm lại */
+    try{
+      const back = await blobGetFixed(1);
+      if(back && back.rev === next.rev) return (result && result.out !== undefined) ? result.out : {state: next};
+    }catch(e){ return (result && result.out !== undefined) ? result.out : {state: next}; }
   }
   throw new Error('Kho dữ liệu bận — thử lại sau vài giây.');
 }
-/* file plugin / tài liệu đính kèm */
-async function putFile(productId, fileName, buf, contentType){
-  const safe = String(fileName).replace(/[^A-Za-z0-9._-]/g, '_').slice(-80);
-  const path = 'files/' + productId + '/' + crypto.randomBytes(6).toString('hex') + '_' + safe;
-  const meta = await blobPut(path, buf, contentType || 'application/octet-stream');
-  return {fileKey: path, fileUrl: meta.downloadUrl || meta.url, fileName: safe, fileSize: buf.length};
+
+/* ---------- FILE (jar / ảnh đại diện / đính kèm) — dispatch theo DRIVER ---------- */
+async function blobPut(pathname, data, contentType){
+  if(DRIVER === 'postgres'){
+    const url = await pgPutFileRaw(pathname, data, contentType);
+    return {downloadUrl: url, url};
+  }
+  const r = await blobFetch('/' + pathname, {
+    method: 'PUT',
+    headers: {
+      'x-add-random-suffix': '0',
+      'x-content-type': contentType || 'application/octet-stream'
+    },
+    body: data
+  });
+  if(!r.ok){ throw new Error('Blob PUT ' + pathname + ' -> ' + r.status); }
+  return r.json();
 }
-/* liệt kê blob theo prefix (dùng cho upload jar theo phần — mục 7) */
+async function blobDelete(pathname){
+  if(DRIVER === 'postgres'){ try{ return await pgDeleteRaw(pathname); }catch(e){ return false; } }
+  try{
+    const r = await blobFetch('/' + pathname, {method: 'DELETE'});
+    return r.ok;
+  }catch(e){ return false; }
+}
+/* liệt kê theo prefix (jar-done dùng số phần do client khai báo nên không cần LIST trong luồng chính;
+   hàm này vẫn giữ cho kiểm tra hành chính/legacy) */
 async function blobList(prefix){
+  if(DRIVER === 'postgres'){
+    const paths = await pgListRaw(prefix);
+    return paths.map(p => ({pathname: p, url: '/api/file?p=' + encodeURIComponent(p)}));
+  }
   const r = await fetchT(BLOB_API + '?limit=100&prefix=' + encodeURIComponent(prefix), {headers: {authorization: 'Bearer ' + BLOB_TOKEN}}, BLOB_TIMEOUT * 2);
   if(!r.ok) throw new Error('Blob list ' + r.status);
   return (await r.json()).blobs || [];
 }
-/* đọc 1 blob trả về Buffer NHỊ PHÂN (không JSON.parse — dùng cho part/ảnh) */
+/* đọc 1 blob trả về Buffer NHỊ PHÂN (không JSON.parse — dùng cho part/ảnh/jar)
+   Nhận 3 dạng: pathname, URL '/api/file?p=…' (postgres), hoặc URL Blob đầy đủ (state cũ sau migrate) */
 async function blobGetRaw(pathOrUrl, ms){
-  const url = String(pathOrUrl).startsWith('http') ? pathOrUrl : BLOB_API + '/' + pathOrUrl;
+  const s = String(pathOrUrl || '');
+  if(DRIVER === 'postgres'){
+    if(s.startsWith('/api/file?p=')){ return pgGetRawByPath(decodeURIComponent(qLookup(s, 'p')), ms); }
+    if(s.startsWith('http')){
+      /* file cũ còn trỏ URL Blob công khai (state legacy) — đọc xuyên qua */
+      const r = await fetchT(s, undefined, ms || 30000);
+      if(!r.ok) throw new Error('GET ' + s.slice(-40) + ' -> ' + r.status);
+      return Buffer.from(await r.arrayBuffer());
+    }
+    return pgGetRawByPath(s, ms);
+  }
+  const url = s.startsWith('http') ? s : BLOB_API + '/' + s;
   const r = await fetchT(url, {headers: {authorization: 'Bearer ' + BLOB_TOKEN}}, ms || 30000);
-  if(!r.ok) throw new Error('Blob GET ' + String(pathOrUrl).slice(-40) + ' -> ' + r.status);
+  if(!r.ok) throw new Error('Blob GET ' + s.slice(-40) + ' -> ' + r.status);
   return Buffer.from(await r.arrayBuffer());
+}
+function qLookup(url, key){
+  try{ return new URL(url, 'http://x').searchParams.get(key) || ''; }catch(e){ return ''; }
+}
+/* file plugin / tài liệu đính kèm — trả {fileKey, fileUrl, fileName, fileSize} theo driver */
+async function putFile(productId, fileName, buf, contentType){
+  const safe = String(fileName).replace(/[^A-Za-z0-9._-]/g, '_').slice(-80);
+  const path = 'files/' + productId + '/' + crypto.randomBytes(6).toString('hex') + '_' + safe;
+  const meta = await blobPut(path, buf, contentType || 'application/octet-stream');
+  const url = DRIVER === 'postgres'
+    ? '/api/file?p=' + encodeURIComponent(path)
+    : (meta.downloadUrl || meta.url);
+  return {fileKey: path, fileUrl: url, fileName: safe, fileSize: buf.length};
 }
 
 /* ---------- mật khẩu + session + 2FA ---------- */
@@ -362,6 +513,7 @@ module.exports = {
   json, ok, fail, uid, nowMs, isoDate, nowStr, vnNow, vnDate, vnStr,
   clampInt, cleanStr, sleep, fetchT, BLOB_TIMEOUT,
   blobPut, blobDelete, withState, getState, putFile, STATE_PATH, blobList, blobGetRaw,
+  DRIVER, fileUrlOf, seedState,
   hashPassword, checkPassword, newSessionToken, hashEqual,
   totpCode, verify2fa, genSecret32,
   parseCookies, sessionCookie, clearCookie,
@@ -369,6 +521,7 @@ module.exports = {
   isVipKey, isFreeKey, licActive, userLevel,
   sha256Hex, isZipBytes, sniffImage
 };
+function fileUrlOf(path){ return '/api/file?p=' + encodeURIComponent(path); }
 
 /* seedState được inject bởi seed.js (require vòng tránh lặp) */
 let _seedState = null;

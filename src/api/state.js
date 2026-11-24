@@ -6,7 +6,12 @@ const O = require('./_lib/ops.js');
 
 module.exports = async (req, res) => {
   try{
-    const st = await C.getState();
+    /* 25/11/2026 — CHẾ ĐỘ DEGRADED: kho dữ liệu đọc không được (vd Blob đang bị khóa quota)
+       vẫn trả state seed + cờ degraded để SPA vẽ bình thường + banner "bảo trì"
+       — KHÔNG còn trang trắng như trước đây. */
+    let st, degraded = false, degWhy = '';
+    try{ st = await C.getState(); }
+    catch(e){ degraded = true; degWhy = C.cleanStr(e.message, 220); st = C.seedState(); }
     const me = A.getAuth(req, st);
     const admin = me && me.role === 'admin';
     const settings = st.settings || {};
@@ -37,6 +42,8 @@ module.exports = async (req, res) => {
     const data = {
       ok: true,
       serverTime: C.vnStr(),
+      degraded, degWhy,
+      driver: C.DRIVER,
       public: {
         licenseTiers: (settings.licenseTiers && settings.licenseTiers.length) ? settings.licenseTiers : O.tierDefaults(),
         bank: {bin: bank.bin, account: bank.account, name: bank.name, shortName: bank.shortName, isSample: !!bank.isSample},

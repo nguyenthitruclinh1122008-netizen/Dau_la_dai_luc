@@ -6,7 +6,9 @@ const O = require('./_lib/ops.js');
 
 module.exports = async (req, res) => {
   let body = {};
-  try{ body = req.method === 'GET' ? {} : await readBody(req, 100000); }catch(e){ return C.fail(res, 400, 'Body không hợp lệ.'); }
+  /* FIX 25/11/2026: 100.000 → 4.000.000 — trước đây ảnh đại diện ≤2MB (fileB64 ~2,7MB) luôn bị
+     chặn "Body không hợp lệ" do giới hạn body cũ chỉ 100KB (mục 8 không thể dùng thật) */
+  try{ body = req.method === 'GET' ? {} : await readBody(req, 4000000); }catch(e){ return C.fail(res, 400, 'Body quá lớn hoặc không hợp lệ (tối đa ~3MB dữ liệu ảnh).'); }
   const act = body.act || C.qOf(req).act || '';
 
   try{
@@ -41,13 +43,15 @@ module.exports = async (req, res) => {
         };
         st.users.push(nu);
         /* 24/11/2026 — YÊU CẦU CHỦ SHOP: đăng ký xong tự cấp 1 KEY FREE tiền tố DF,
-           dùng vĩnh viễn, không cần mua hay làm gì thêm. Log + thông báo ngay. */
-        const freeKey = O.ensureFreeKey(st, nu);
-        O.logLevel(st, {by: 'auto (đăng ký)', act: 'register-free', who: nu.username, from: '(tài khoản mới)', to: 'free', keys: [freeKey], reason: 'Tự cấp KEY FREE khi đăng ký'});
+           dùng vĩnh viễn, không cần mua hay làm gì thêm. Log + thông báo ngay.
+           FIX 25/11/2026: dùng CHUỖI key (freeKeyStr) trong notify/log/response — trước đây
+           truyền cả object license → thông báo hiện "[object Object]". */
+        const freeKeyStr = O.ensureFreeKey(st, nu).key;
+        O.logLevel(st, {by: 'auto (đăng ký)', act: 'register-free', who: nu.username, from: '(tài khoản mới)', to: 'free', keys: [freeKeyStr], reason: 'Tự cấp KEY FREE khi đăng ký'});
         const token = C.newSessionToken();
         st.sessions[token] = {uid: nu.id, exp: C.nowMs() + 30*86400000};
-        O.notify(st, nu.id, 'license', 'Bạn được tặng KEY BẢN FREE: ' + freeKey, 'Key bản FREE dùng VĨNH VIỄN, tải được Plugin bản FREE trong mục "Tải file". Nâng cấp VIP bất cứ lúc nào tại cửa hàng.');
-        return {out: {ok:true, username: nu.username, token, setCookie: C.sessionCookie(token), freeKey}};
+        O.notify(st, nu.id, 'license', 'Bạn được tặng KEY BẢN FREE: ' + freeKeyStr, 'Key bản FREE dùng VĨNH VIỄN, tải được Plugin bản FREE trong mục "Tải file". Nâng cấp VIP bất cứ lúc nào tại cửa hàng.');
+        return {out: {ok:true, username: nu.username, token, setCookie: C.sessionCookie(token), freeKey: freeKeyStr}};
       });
       if(!out.ok) return C.json(res, 200, out);
       res.setHeader('Set-Cookie', out.setCookie);

@@ -2483,6 +2483,7 @@ async function fetchState(force){
       if(!d.ok) throw new Error(d.msg || 'Không tải được dữ liệu máy chủ');
       Object.assign(S, d);
       S.loaded = true; S.fetchedAt = Date.now();
+      showDegradedBanner(d);
       buildNav();
       return;
     }catch(e){
@@ -2493,6 +2494,18 @@ async function fetchState(force){
   throw new Error((lastErr && lastErr.message) || 'Không kết nối được máy chủ dữ liệu');
 }
 function current(){ return S.me; }
+/* 25/11/2026 — banner chế độ bảo trì (kho dữ liệu đọc được nhưng ghi bị chặn / state seed):
+   thay cho "trang trắng" cũ — người dùng biết rõ hệ thống đang tạm giới hạn */
+function showDegradedBanner(d){
+  const old = document.getElementById('dl-degraded');
+  if(old) old.remove();
+  if(!d || !d.degraded) return;
+  const bar = document.createElement('div');
+  bar.id = 'dl-degraded';
+  bar.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#7a2e0e;color:#ffd9b3;font:600 13px/1.4 system-ui;padding:10px 16px;text-align:center;box-shadow:0 -2px 8px rgba(0,0,0,.35)';
+  bar.textContent = '⚠ Hệ thống đang BẢO TRÌ kho dữ liệu (Blob store tạm khóa theo quota Vercel — tự mở lại 24/12/2026). Bạn vẫn xem được nội dung; đăng nhập / đăng ký / mua hàng tạm thời không khả dụng — quay lại sau hoặc liên hệ admin.';
+  document.body.appendChild(bar);
+}
 function isAdmin(){ return S.me && S.me.role === 'admin'; }
 function adminOK(){ return isAdmin() && !!sessionStorage.getItem('DL_ADMIN_TICKET'); }
 function unreadCount(){

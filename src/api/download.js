@@ -59,10 +59,18 @@ module.exports = async (req, res) => {
     }
     else return C.json(res, 400, {ok:false, msg:'Tham số tải không hợp lệ.'});
 
-    /* proxy file từ Blob — URL file KHÔNG bao giờ lộ ra client (fetch có timeout 30s) */
-    const r = await C.fetchT(target.fileUrl, undefined, 30000);
-    if(!r.ok) return C.fail(res, 502, 'File nguồn lỗi (' + r.status + ').');
-    const buf = Buffer.from(await r.arrayBuffer());
+    /* proxy file từ kho — URL file KHÔNG bao giờ lộ ra client.
+       25/11/2026: URL nội bộ '/api/file?p=…' (kho Postgres v2beta) đọc thẳng từ DB;
+       URL http (Blob công khai) fetch như cũ (timeout 30s) */
+    let buf;
+    if(String(target.fileUrl).indexOf('/') === 0){
+      try{ buf = await C.blobGetRaw(target.fileUrl, 60000); }
+      catch(e){ return C.fail(res, 502, 'File nguồn lỗi: ' + e.message); }
+    }else{
+      const r = await C.fetchT(target.fileUrl, undefined, 30000);
+      if(!r.ok) return C.fail(res, 502, 'File nguồn lỗi (' + r.status + ').');
+      buf = Buffer.from(await r.arrayBuffer());
+    }
     if(target.purchaseId){
       await C.withState(st2 => {
         const pv = (st2.purchases || []).find(p => p.id === target.purchaseId);
