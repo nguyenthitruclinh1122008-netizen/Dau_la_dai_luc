@@ -110,7 +110,7 @@ canvas.chart{width:100%;height:230px;background:var(--card2);border:1px solid va
 .stat-ok{color:var(--teal);font-weight:700}.stat-err{color:#ff8589;font-weight:700}
 .pill-row{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
 /* hamburger + drawer menu (mọi kích thước màn hình — thay dải menu ngang dài) */
-.burger{display:inline-flex;flex-direction:column;justify-content:center;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:11px 11px;cursor:pointer;flex:none}
+.burger{display:inline-flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;min-width:44px;min-height:44px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:11px 12px;cursor:pointer;flex:none}
 .burger span{display:block;width:20px;height:2px;background:var(--gold);border-radius:2px}
 .burger:hover{border-color:var(--gold)}
 .drawer-mask{position:fixed;inset:0;background:rgba(4,8,20,.62);z-index:90;opacity:0;pointer-events:none;transition:opacity .2s}
@@ -149,7 +149,7 @@ body.menu-open .drawer-mask{opacity:1;pointer-events:auto}
 <main class="wrap" id="app"></main>
 <footer class="wrap">
   <div>Đấu La Đại Lục — Cửa hàng Plugin bản quyền · web v2.0 (24/11/2026) — Cửa hàng + thanh toán QR/thẻ cào/ví + khu quản trị</div>
-  <div style="margin-top:4px">Web v2.0 — dữ liệu (tài khoản, đơn hàng, ví, Plugin) lưu trên <b>database server</b> · backend Vercel Functions + Vercel Blob.</div>
+  <div style="margin-top:4px">Web v2.0 — dữ liệu (tài khoản, đơn hàng, ví, Plugin) lưu trên <b>máy chủ dữ liệu</b> (Vercel Functions + Vercel Blob).</div>
 </footer>
 <div id="toast"></div>
 <script>
@@ -2480,7 +2480,7 @@ async function fetchState(force){
     try{
       const r = await fetch('/api/state', {credentials:'include', signal: ctl ? ctl.signal : undefined});
       const d = await r.json();
-      if(!d.ok) throw new Error(d.msg || 'Không tải được dữ liệu server');
+      if(!d.ok) throw new Error(d.msg || 'Không tải được dữ liệu máy chủ');
       Object.assign(S, d);
       S.loaded = true; S.fetchedAt = Date.now();
       buildNav();
@@ -2490,7 +2490,7 @@ async function fetchState(force){
       if(i < 2) await new Promise(res => setTimeout(res, 1200 * (i + 1)));
     }finally{ if(timer) clearTimeout(timer); }
   }
-  throw new Error((lastErr && lastErr.message) || 'Không kết nối được server dữ liệu');
+  throw new Error((lastErr && lastErr.message) || 'Không kết nối được máy chủ dữ liệu');
 }
 function current(){ return S.me; }
 function isAdmin(){ return S.me && S.me.role === 'admin'; }
@@ -2510,7 +2510,7 @@ async function API(file, body, method){
     body: method === 'GET' ? undefined : JSON.stringify(body || {})
   });
   let d = {};
-  try{ d = await r.json(); }catch(e){ d = {ok:false, msg:'Server trả về không hợp lệ (' + r.status + ')'}; }
+  try{ d = await r.json(); }catch(e){ d = {ok:false, msg:'Máy chủ trả về dữ liệu không hợp lệ (' + r.status + ')'}; }
   if(d.auth){ sessionStorage.removeItem('DL_ADMIN_TICKET'); toast(d.msg || 'Phiên đăng nhập đã hết — đăng nhập lại.', true); location.hash = '#/login?next=' + encodeURIComponent(location.hash); throw new Error(d.msg || 'auth'); }
   return d;
 }
@@ -2585,7 +2585,7 @@ function buildNav(){
   const route = (location.hash || '#/home').split('?')[0];
   const badge = unreadCount();
   const cbadge = cartCount();
-  let h = `<span class="brand">⚔ ĐẤU LA ĐẠI LỤC <small>· web v2.0 (backend thật)</small></span><span class="spacer"></span>`;
+  let h = `<span class="brand">⚔ ĐẤU LA ĐẠI LỤC <small>· web v2.0 (máy chủ thật)</small></span><span class="spacer"></span>`;
   if(u){
     h += `<span class="userchip">${esc(u.avatar || '👤')} <b>${esc(u.displayName || u.username)}</b><span class="uc-role"> · ${u.role==='admin'?'Quản trị':'Thành viên'}</span><span class="uc-bal"> · 💰 <b>${fmtVND(u.balance)}</b></span></span>
           <button class="btn btn-sm" data-act="logout">Đăng xuất</button>`;
@@ -2615,7 +2615,7 @@ function buildNav(){
     ]));
     if(adminOK()){
       d.push(gsec('👥 Người dùng', [['#/a/users', '👤 Người dùng'], ['#/a/credit', '💰 Cấp tiền'], ['#/a/referrals', '🤝 Giới thiệu']]));
-      d.push(gsec('🔑 License & Key', [['#/a/pricing', '🪜 Mốc gói & giá'], ['#/a/grant-vip', '⬆⬇ Nâng/hạ cấp VIP'], ['#/a/mint-key', '🔑 Tạo key'], ['#/a/plugins', '📦 Sản phẩm']]));
+      d.push(gsec('🔑 Key bản quyền', [['#/a/pricing', '🪜 Mốc gói & giá'], ['#/a/grant-vip', '⬆⬇ Nâng/hạ cấp VIP'], ['#/a/mint-key', '🔑 Tạo key'], ['#/a/plugins', '📦 Sản phẩm']]));
       d.push(gsec('💰 Tài chính', [['#/a/orders', '🧾 Đơn hàng'], ['#/a/deposits', '💳 Duyệt nạp tiền'], ['#/a/coupons', '🏷 Mã giảm giá'], ['#/a/topup-rates', '📉 Chiết khấu'], ['#/a/bank', '🏦 Ngân hàng'], ['#/a/stats', '📊 Thống kê']]));
       d.push(gsec('📣 Nội dung', [['#/a/broadcast', '📢 Gửi thông báo'], ['#/a/changelog', '📜 Quản lý cập nhật'], ['#/a/reviews', '⭐ Đánh giá'], ['#/a/tickets', '🎫 Phiếu hỗ trợ']]));
       d.push(gsec('⚙ Hệ thống', [['#/a/dashboard', '📈 Tổng quan'], ['#/a/serverstats', '🖥 Máy chủ'], ['#/a/backup', '💾 Sao lưu'], ['#/a/export', '📤 Xuất dữ liệu']]));
@@ -2640,7 +2640,7 @@ let RENDER_SEQ = 0;
 async function render(){
   const seq = ++RENDER_SEQ;
   try{ await fetchState(); }catch(e){
-    document.getElementById('app').innerHTML = `<div class="err-call">Không kết nối được server dữ liệu: ${esc(e.message)}<br><button class="btn" onclick="render()">Thử lại</button></div>`;
+    document.getElementById('app').innerHTML = `<div class="err-call">Không kết nối được máy chủ dữ liệu: ${esc(e.message)}<br><button class="btn" onclick="render()">Thử lại</button></div>`;
     return;
   }
   if(seq !== RENDER_SEQ) return;
@@ -2656,8 +2656,8 @@ async function render(){
   if(needAdmin && !isAdmin()){ document.getElementById('app').innerHTML = `<div class="err-call">Chỉ quản trị viên mới truy cập khu vực này.</div>`; buildNav(); return; }
   if(needAdmin && !adminOK()){
     document.getElementById('app').innerHTML = `
-    <h1 class="pagetitle">🔐 Cổng quản trị<span class="tagchip">Bảo mật 2 lớp — server xác thực</span></h1>
-    <div class="subtitle">Khu quản trị chỉ mở sau khi nhập đúng mã 6 chữ số VÀ mật khẩu quản trị (server kiểm tra, giữ phiên 30 phút).</div>
+    <h1 class="pagetitle">🔐 Cổng quản trị<span class="tagchip">Bảo mật 2 lớp — máy chủ xác thực</span></h1>
+    <div class="subtitle">Khu quản trị chỉ mở sau khi nhập đúng mã 6 chữ số VÀ mật khẩu quản trị (máy chủ kiểm tra, giữ phiên 30 phút).</div>
     <div class="card" style="max-width:440px"><form data-form="admin-gate">
       <div class="form-row"><label>Mã 6 chữ số</label><input name="code" inputmode="numeric" maxlength="6" required placeholder="Nhập 6 chữ số"></div>
       <div class="form-row"><label>Mật khẩu quản trị</label><input name="pass" type="password" required placeholder="Mật khẩu quản trị"></div>
@@ -2752,9 +2752,9 @@ ROUTES['#/home'] = { title:'Trang chủ', html(){
     <div class="pill-row" style="margin-top:12px">
       <span class="badge b-ok">Paper 1.21.1 — test thật</span>
       <span class="badge b-info">Bản mới nhất: 3.16.9 BETA10</span>
-      <span class="badge b-warn">Backend + database server thật</span>
+      <span class="badge b-warn">Máy chủ + cơ sở dữ liệu thật</span>
     </div>
-    <div style="margin-top:14px"><a class="btn btn-p" href="#/shop">🛒 Mua Plugin ngay</a> ${logged?'':`<a class="btn btn-p" href="#/register">Đăng ký tài khoản</a> <a class="btn" href="#/login">Đăng nhập</a>`} <a class="btn" href="#/u/changelog">Xem changelog</a></div>
+    <div style="margin-top:14px"><a class="btn btn-p" href="#/shop">🛒 Mua Plugin ngay</a> ${logged?'':`<a class="btn btn-p" href="#/register">Đăng ký tài khoản</a> <a class="btn" href="#/login">Đăng nhập</a>`} <a class="btn" href="#/u/changelog">Xem cập nhật</a></div>
   </section>
   <div class="card"><h3>🛒 Plugin đang bán — mua bằng QR ngân hàng, thẻ cào hoặc ví</h3>
     <div class="grid3">${feat.slice(0,3).map(p=>`
@@ -2775,7 +2775,7 @@ ROUTES['#/home'] = { title:'Trang chủ', html(){
     </div>`).join('')}
     </div>
   </div>
-  <div class="card" style="margin-top:14px"><h3>🗺 Bản đồ tính năng web v2.0 — bấm để mở trực tiếp (server thật)</h3>
+  <div class="card" style="margin-top:14px"><h3>🗺 Bản đồ tính năng web v2.0 — bấm để mở trực tiếp (máy chủ thật)</h3>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(235px,1fr));gap:8px">
       ${[
         ['U1','Hồ sơ & đổi email/mật khẩu','#/u/profile',0],
@@ -2789,9 +2789,9 @@ ROUTES['#/home'] = { title:'Trang chủ', html(){
         ['U7','2FA TOTP chuẩn','#/u/2fa',0],
         ['U8','Kiểm tra license key','#/u/license-check',0],
         ['U9','Điểm thưởng đổi coupon','#/u/points',0],
-        ['U10','Lịch sử changelog','#/u/changelog',0],
-        ['A1','Dashboard + biểu đồ','#/a/dashboard',1],
-        ['A14','Quản lý Plugin + upload file','#/a/plugins',1],
+        ['U10','Lịch sử cập nhật','#/u/changelog',0],
+        ['A1','Tổng quan + biểu đồ','#/a/dashboard',1],
+        ['A14','Quản lý Plugin + tải lên file','#/a/plugins',1],
         ['A15','Duyệt đơn hàng','#/a/orders',1],
         ['A16','Duyệt giao dịch nạp tiền','#/a/deposits',1],
         ['A17','Điều phối đánh giá','#/a/reviews',1],
@@ -2800,12 +2800,12 @@ ROUTES['#/home'] = { title:'Trang chủ', html(){
         ['A11','Cấp tiền trực tiếp vào ví','#/a/credit',1]
       ].map(f=>{
         const href = logged ? f[2] : ('#/login?next=' + encodeURIComponent(f[2]));
-        return `<a href="${href}" style="display:block;border:1px solid rgba(255,255,255,.14);border-radius:8px;padding:8px 10px;text-decoration:none"><b style="color:#f0b642">${f[1]}</b>${f[3]?' <span class="badge b-warn">admin</span>':''}</a>`;
+        return `<a href="${href}" style="display:block;border:1px solid rgba(255,255,255,.14);border-radius:8px;padding:8px 10px;text-decoration:none"><b style="color:#f0b642">${f[1]}</b>${f[3]?' <span class="badge b-warn">quản trị</span>':''}</a>`;
       }).join('')}
     </div>
-    <div class="muted" style="margin-top:10px">Tài khoản: <span class="code">TRUC_LINH / TRUC_LINH</span> (quản trị — vào khu A cần mã 6 số + mật khẩu quản trị) · demo khách: <span class="code">khach1 / 123456</span>. Dữ liệu lưu trên server (database Vercel), đăng nhập thiết bị nào cũng thấy đúng số dư.</div>
+    <div class="muted" style="margin-top:10px">Tài khoản: <span class="code">TRUC_LINH / TRUC_LINH</span> (quản trị — vào khu quản trị cần mã 6 số + mật khẩu quản trị) · demo khách: <span class="code">khach1 / 123456</span>. Dữ liệu lưu trên máy chủ (database Vercel), đăng nhập thiết bị nào cũng thấy đúng số dư.</div>
   </div>
-  <div class="card" style="margin-top:14px"><h3>🔧 Changelog mới nhất</h3>
+  <div class="card" style="margin-top:14px"><h3>🔧 Cập nhật mới nhất</h3>
     ${cl.map(c=>`<div class="nitem"><div class="ntitle">v${esc(c.version)} — ${esc(c.title)}</div><div class="nmeta">${fmtDate(c.date)}</div></div>`).join('')}
     <a class="btn btn-sm" href="#/u/changelog">Tất cả phiên bản →</a>
   </div>`;
@@ -2817,7 +2817,7 @@ ROUTES['#/login'] = { title:'Đăng nhập', html(){
   const hint = hint2fa ? `<div class="warn-call">🔐 Tài khoản <b>${esc(hint2fa)}</b> đã bật 2FA — mở app authenticator lấy mã 6 số nhập vào ô dưới.</div>` : '';
   return `
   <h1 class="pagetitle">Đăng nhập</h1>
-  <div class="subtitle">Trung tâm tài khoản Đấu La Đại Lục — dữ liệu lưu trên server.</div>
+  <div class="subtitle">Trung tâm tài khoản Đấu La Đại Lục — dữ liệu lưu trên máy chủ.</div>
   <div class="grid2">
     <div class="card"><h3>Đăng nhập</h3>
       ${hint}
@@ -2829,13 +2829,13 @@ ROUTES['#/login'] = { title:'Đăng nhập', html(){
       </form>
       <div class="muted" style="margin-top:10px">Tài khoản — quản trị: <span class="code">TRUC_LINH / TRUC_LINH</span> · demo khách: <span class="code">khach1 / 123456</span></div>
       <div class="muted" style="margin-top:6px">Chưa có tài khoản? <a href="#/register"><b>Đăng ký ngay (miễn phí)</b></a></div>
-      <div class="warn-call" style="margin-top:8px">🔐 Tài khoản quản trị: đăng nhập xong bấm tab <b>Khu quản trị</b> → nhập <b>mã 6 số</b> + <b>mật khẩu quản trị</b> (server xác thực, giữ 30 phút).</div>
+      <div class="warn-call" style="margin-top:8px">🔐 Tài khoản quản trị: đăng nhập xong bấm tab <b>Khu quản trị</b> → nhập <b>mã 6 số</b> + <b>mật khẩu quản trị</b> (máy chủ xác thực, giữ phiên 30 phút).</div>
     </div>
     <div class="card"><h3>Bạn sẽ nhận được gì?</h3>
       <div class="nlist">
-        <div class="nitem"><div class="ntitle">📦 Kho Plugin đã mua</div><div class="nbody">Tải Plugin + resource pack đã thanh toán bất cứ lúc nào — server kiểm quyền tải.</div></div>
+        <div class="nitem"><div class="ntitle">📦 Kho Plugin đã mua</div><div class="nbody">Tải Plugin + resource pack đã thanh toán bất cứ lúc nào — máy chủ kiểm quyền tải.</div></div>
         <div class="nitem"><div class="ntitle">💰 Ví tiền cá nhân</div><div class="nbody">Nạp QR ngân hàng (mã Napas thật) hoặc thẻ cào 9 nhà mạng, chiết khấu minh bạch.</div></div>
-        <div class="nitem"><div class="ntitle">💬 Chat hỗ trợ trực tiếp admin</div><div class="nbody">Báo lỗi Plugin, hỏi cài đặt, admin trả lời ngay trên web.</div></div>
+        <div class="nitem"><div class="ntitle">💬 Chat hỗ trợ trực tiếp với quản trị viên</div><div class="nbody">Báo lỗi Plugin, hỏi cài đặt, quản trị viên trả lời ngay trên web.</div></div>
       </div>
     </div>
   </div>`;
@@ -2932,7 +2932,7 @@ ROUTES['#/u/profile'] = { title:'Hồ sơ cá nhân', user:true, html(){
     <div>
       <div class="card"><h3>🖼 Ảnh đại diện + tên hiển thị</h3>
         <form data-form="u1-profile">
-          <div class="form-row"><label>Tên hiển thị (để trống = dùng username)</label><input name="displayName" value="${esc(u.displayName||'')}" maxlength="40"></div>
+          <div class="form-row"><label>Tên hiển thị (để trống = dùng tên đăng nhập)</label><input name="displayName" value="${esc(u.displayName||'')}" maxlength="40"></div>
           <div class="form-row"><label>Chọn avatar</label>
             <div class="pill-row">${AVATARS.map(a=>`<label style="cursor:pointer"><input type="radio" name="avatar" value="${a}" style="display:none" ${u.avatar===a?'checked':''}><span style="font-size:1.4rem;border:1px solid var(--line);border-radius:8px;padding:3px 7px;display:inline-block" data-avchip="${a}">${a}</span></label>`).join('')}</div>
           </div>
@@ -3018,10 +3018,10 @@ ROUTES['#/u/downloads'] = { title:'Tải file', user:true, html(){
   try{ reveal = JSON.parse(sessionStorage.getItem('DL_REVEAL_KEY') || 'null'); }catch(e){}
   if(reveal) setTimeout(() => sessionStorage.removeItem('DL_REVEAL_KEY'), 80);
   return `
-  <h1 class="pagetitle">Tải file<span class="tagchip">1 mục duy nhất theo cấp tài khoản — server kiểm quyền + hạn từng lần tải</span></h1>
+  <h1 class="pagetitle">Tải file<span class="tagchip">1 mục duy nhất theo cấp tài khoản — máy chủ kiểm quyền + hạn từng lần tải</span></h1>
   ${reveal ? `<div class="card" style="border-color:#f0b642"><h3>🔑 Key của bạn — CHỈ hiển thị ĐÚNG 1 LẦN này</h3>
-    <div class="subtitle">Lưu lại ngay (copy vào chỗ an toàn). Sau khi rời trang, key luôn hiện dạng ẩn <span class="code">${esc(maskKey(reveal.key))}</span> — dùng trang <a href="#/u/license-check">🔍 Tra cứu key</a> để xem trạng thái bằng cách nhập key đầy đủ.</div>
-    <div style="font-size:1.5rem;letter-spacing:2px"><span class="code">${esc(reveal.key)}</span> <button class="btn btn-sm" data-act="copy-key" data-key="${esc(reveal.key)}">📋 Copy</button> <span class="badge b-warn">${esc(reveal.label || 'license')}</span></div>
+    <div class="subtitle">Lưu lại ngay (sao chép vào chỗ an toàn). Sau khi rời trang, key luôn hiện dạng ẩn <span class="code">${esc(maskKey(reveal.key))}</span> — dùng trang <a href="#/u/license-check">🔍 Tra cứu key</a> để xem trạng thái bằng cách nhập key đầy đủ.</div>
+    <div style="font-size:1.5rem;letter-spacing:2px"><span class="code">${esc(reveal.key)}</span> <button class="btn btn-sm" data-act="copy-key" data-key="${esc(reveal.key)}">📋 Sao chép</button> <span class="badge b-warn">${esc(reveal.label || 'license')}</span></div>
   </div>` : ''}
   ${vip ? `
   <div class="ok-msg">💎 Cấp tài khoản: <b>VIP</b> — License hiện tại: <span class="code" id="keyview-vip" data-shown="0">${esc(maskKey(vipLic.key))}</span> <button class="btn btn-sm" data-act="toggle-key" data-id="vip" data-key="${esc(vipLic.key)}">👁 Ẩn/Hiện</button> — mốc <b>${esc(vipLic.package)}</b> · ${vipLic.expires ? 'hết hạn ' + fmtDate(vipLic.expires) + ' (còn ' + daysUntil(vipLic.expires) + ' ngày)' : '<b>Vĩnh viễn — không bao giờ hết hạn</b>'}</div>
@@ -3059,8 +3059,8 @@ ROUTES['#/u/downloads'] = { title:'Tải file', user:true, html(){
 `;}};
 /* tải file theo license: yêu cầu NHẬP key đầy đủ — key không nằm trong link/DOM */
 ACTIONS['dl-lic'] = (d) => {
-  const hint = d.f === 'vip' ? 'Nhập LICENSE VIP đầy đủ (VIP dạng DL-VIP-9F2K-8817)' : 'Nhập KEY bản FREE đầy đủ (FREE dạng DF-A1B2-4837)';
-  const k = (prompt(hint + ' — server kiểm tra quyền + hạn từng lần tải.') || '').trim().toUpperCase();
+  const hint = d.f === 'vip' ? 'Nhập KEY VIP đầy đủ (VIP dạng DL-VIP-9F2K-8817)' : 'Nhập KEY bản FREE đầy đủ (FREE dạng DF-A1B2-4837)';
+  const k = (prompt(hint + ' — máy chủ kiểm tra quyền + hạn từng lần tải.') || '').trim().toUpperCase();
   if(!k) return;
   location.href = '/api/download?lic=' + encodeURIComponent(k) + '&f=' + d.f;
 };
@@ -3073,7 +3073,7 @@ ACTIONS['toggle-key'] = (d, el) => {
   span.dataset.shown = shown ? '0' : '1';
 };
 ACTIONS['copy-key'] = (d, el) => {
-  const done = () => { toast('📋 Đã copy key — dán vào chỗ an toàn, trang này không lưu.'); };
+  const done = () => { toast('📋 Đã sao chép key — dán vào chỗ an toàn, trang này không lưu.'); };
   if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(d.key).then(done, done);
   else { const ta = document.createElement('textarea'); ta.value = d.key; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); }catch(e){} document.body.removeChild(ta); done(); }
 };
@@ -3117,7 +3117,7 @@ ROUTES['#/u/referral'] = { title:'Giới thiệu bạn bè', user:true, html(){
   <div class="card"><h3>🔗 Link mời của bạn</h3>
     <div class="form-inline">
       <input readonly value="${esc(link)}" id="reflink" onclick="this.select()">
-      <button class="btn btn-p" data-act="ref-copy">📋 Copy link</button>
+      <button class="btn btn-p" data-act="ref-copy">📋 Sao chép link</button>
     </div>
     <p class="muted" style="margin-top:8px">Bạn bè đăng ký qua link trên → khi họ mua hàng, hệ thống server ghi nhận và admin duyệt hoa hồng cho bạn (tự cộng vào ví).</p>
   </div>
@@ -3136,15 +3136,15 @@ ACTIONS['ref-copy'] = () => {
   const inp = document.getElementById('reflink');
   inp.select();
   try{ navigator.clipboard.writeText(inp.value); }catch(e){ document.execCommand('copy'); }
-  toast('Đã copy link giới thiệu.');
+  toast('Đã sao chép link giới thiệu.');
 };
 
 /* ---- U6 Ticket + chat trực tuyến (polling 8s khi mở trang) ---- */
 let TICKET_TIMER = null;
-ROUTES['#/u/tickets'] = { title:'Hỗ trợ (ticket)', user:true, html(){
+ROUTES['#/u/tickets'] = { title:'Hỗ trợ', user:true, html(){
   const mine = (S.myTickets||[]).slice();
   return `
-  <h1 class="pagetitle">Chat hỗ trợ trực tuyến<span class="tagchip">admin trả lời trực tiếp</span></h1>
+  <h1 class="pagetitle">Chat hỗ trợ trực tuyến<span class="tagchip">quản trị viên trả lời trực tiếp</span></h1>
   <div class="subtitle">Tạo ticket: báo lỗi Plugin, thanh toán, hướng dẫn cài đặt. Trang tự làm mới — trả lời của admin hiện trong vòng vài giây.</div>
   <div class="grid2">
     <div class="card"><h3>➕ Tạo ticket mới</h3>
@@ -3155,7 +3155,7 @@ ROUTES['#/u/tickets'] = { title:'Hỗ trợ (ticket)', user:true, html(){
         <button class="btn btn-p">Gửi ticket cho admin</button>
       </form>
     </div>
-    <div class="card"><h3>Tickets của bạn (${mine.length}) — tự cập nhật</h3>
+    <div class="card"><h3>Phiếu hỗ trợ của bạn (${mine.length}) — tự cập nhật</h3>
       ${mine.map(t=>`<div class="nitem" style="border-left-color:${t.status==='Đã đóng'?'var(--mut)':'var(--gold)'}">
         <div class="ntitle"><span class="code">${t.id}</span> ${esc(t.subject)} ${t.status==='Đã đóng'?'<span class="badge b-mut">Đã đóng</span>':t.status==='Đang xử lý'?'<span class="badge b-info">Đang xử lý</span>':'<span class="badge b-warn">Chờ admin</span>'}
         ${t.status!=='Đã đóng'?`<button class="btn btn-sm" style="float:right" data-act="u6-close" data-id="${t.id}">Đóng</button>`:''}</div>
@@ -3173,9 +3173,9 @@ ROUTES['#/u/tickets'] = { title:'Hỗ trợ (ticket)', user:true, html(){
     try{ await fetchState(true); const app=document.getElementById('app'); if(app && !document.activeElement || (document.activeElement && document.activeElement.tagName !== 'INPUT')) render(); }catch(e){}
   }, 8000);
 }};
-FORMS['u6-new'] = (d) => mutate('tickets', {act:'create', type: d.type, subject: d.subject, body: d.body}, 'Đã gửi ticket — admin sẽ trả lời sớm.');
+FORMS['u6-new'] = (d) => mutate('tickets', {act:'create', type: d.type, subject: d.subject, body: d.body}, 'Đã gửi phiếu hỗ trợ — quản trị viên sẽ trả lời sớm.');
 FORMS['u6-reply'] = (d, f) => mutate('tickets', {act:'reply', id: f.dataset.id, body: d.body}, 'Đã gửi tin nhắn.');
-ACTIONS['u6-close'] = (d) => mutate('tickets', {act:'close', id: d.id}, 'Đã đóng ticket.');
+ACTIONS['u6-close'] = (d) => mutate('tickets', {act:'close', id: d.id}, 'Đã đóng phiếu hỗ trợ.');
 
 /* ---- U7 2FA TOTP chuẩn (QR scan vào Google Authenticator) ---- */
 let PENDING_2FA = null;
@@ -3239,7 +3239,7 @@ ROUTES['#/u/license-check'] = { title:'Tra cứu key', html(){
   const logged = !!current();
   const mine = (S.myLicenses||[]);
   return `
-  <h1 class="pagetitle">🔍 Tra cứu license key<span class="tagchip">server tra cứu, không cần đăng nhập</span></h1>
+  <h1 class="pagetitle">🔍 Tra cứu license key<span class="tagchip">máy chủ tra cứu, không cần đăng nhập</span></h1>
   <div class="subtitle">Key không được hiển thị đầy đủ trên các trang (chống lộ/chia sẻ). Nhập key đầy đủ của bạn vào ô dưới để xem trạng thái: còn hạn / hết hạn / vĩnh viễn, mốc thời hạn và số server đang dùng.</div>
   <div class="card"><h3>Nhập key cần tra cứu</h3>
     <form data-form="u8-check" class="form-inline">
@@ -3251,7 +3251,7 @@ ROUTES['#/u/license-check'] = { title:'Tra cứu key', html(){
   ${logged ? `
   <div class="card"><h3>License của bạn (${mine.length}) — chỉ hiện dạng ẩn</h3>
     <div class="tbl-wrap"><table class="tbl">
-      <thead><tr><th>Key (ẩn)</th><th>Mốc thời hạn</th><th>Hết hạn</th><th>Server đang dùng</th><th>Trạng thái</th></tr></thead>
+      <thead><tr><th>Key (ẩn)</th><th>Mốc thời hạn</th><th>Hết hạn</th><th>Máy chủ đang dùng</th><th>Trạng thái</th></tr></thead>
       <tbody>${mine.map(l=>{
         const st = licStatus(l);
         return `<tr><td><span class="code">${esc(maskKey(l.key))}</span></td><td>${esc(l.package)}</td>
@@ -3265,7 +3265,7 @@ ROUTES['#/u/license-check'] = { title:'Tra cứu key', html(){
 FORMS['u8-check'] = async (d) => {
   const key = d.key.trim().toUpperCase();
   const box = document.getElementById('licresult');
-  box.innerHTML = '<div class="muted" style="margin-top:12px">Đang tra cứu server…</div>';
+  box.innerHTML = '<div class="muted" style="margin-top:12px">Đang tra cứu máy chủ…</div>';
   const r = await API('licenses', {act:'lookup', key});
   if(!r.ok){ box.innerHTML = `<div class="err-call">❌ ${esc(r.msg || 'Lỗi tra cứu.')}</div>`; return; }
   if(!r.found){ box.innerHTML = `<div class="err-call" style="margin-top:12px">❌ ${esc(r.msg)}</div>`; return; }
@@ -3276,9 +3276,9 @@ FORMS['u8-check'] = async (d) => {
       <tr><td>Trạng thái</td><td><span class="badge ${badge}">${esc(r.status)}</span></td></tr>
       <tr><td>Mốc thời hạn</td><td><b>${esc(r.package)}</b></td></tr>
       <tr><td>Hết hạn</td><td>${r.expires ? esc(fmtDate(r.expires)) + (r.daysLeft !== null ? ` (còn ${r.daysLeft} ngày)` : '') : '<b>Vĩnh viễn — không bao giờ hết hạn</b>'}</td></tr>
-      <tr><td>Server đang dùng</td><td><b>${r.servers}</b> / ${r.maxServers} slot${r.servers ? '' : ' — chưa kích hoạt server nào'}</td></tr>
-      <tr><td>Tình trạng gán</td><td>${r.assigned ? 'Key đã gán vào một tài khoản' : 'Key rời — chưa gán tài khoản (admin có thể gán giúp)'}</td></tr>
-      <tr><td>Chủ key</td><td class="muted">Bảo mật: server không tiết lộ chủ sở hữu — chỉ ai giữ đúng key mới tra cứu được trạng thái này</td></tr>
+      <tr><td>Máy chủ đang dùng</td><td><b>${r.servers}</b> / ${r.maxServers} slot${r.servers ? '' : ' — chưa kích hoạt server nào'}</td></tr>
+      <tr><td>Tình trạng gán</td><td>${r.assigned ? 'Key đã gán vào một tài khoản' : 'Key rời — chưa gán tài khoản (quản trị viên có thể gán giúp)'}</td></tr>
+      <tr><td>Chủ key</td><td class="muted">Bảo mật: máy chủ không tiết lộ chủ sở hữu — chỉ ai giữ đúng key mới tra cứu được trạng thái này</td></tr>
     </tbody></table>`;
 };
 
@@ -3306,9 +3306,9 @@ ROUTES['#/u/points'] = { title:'Điểm thưởng', user:true, html(){
 ACTIONS['points-redeem'] = () => mutate('auth', {act:'points-redeem'}, 'Đổi thành công!');
 
 /* ---- U10 Changelog ---- */
-ROUTES['#/u/changelog'] = { title:'Changelog', html(){
+ROUTES['#/u/changelog'] = { title:'Cập nhật', html(){
   return `
-  <h1 class="pagetitle">Changelog phiên bản</h1>
+  <h1 class="pagetitle">Lịch sử phiên bản</h1>
   <div class="subtitle">Toàn bộ thay đổi qua các phiên bản Đấu La Đại Lục.</div>
   ${(S.public.changelog||[]).map(c=>`<div class="card">
     <h3>v${esc(c.version)} <span class="badge b-info">${fmtDate(c.date)}</span></h3>
@@ -3796,11 +3796,11 @@ ROUTES['#/u/wallet'] = { title:'Nạp tiền vào ví', user:true, html(){
   const mine = (S.myDeposits||[]).slice();
   const bankTx = (S.myWallet||[]).slice(0, 12);
   return `
-  <h1 class="pagetitle">💰 Nạp tiền vào ví<span class="tagchip">dữ liệu server</span></h1>
+  <h1 class="pagetitle">💰 Nạp tiền vào ví<span class="tagchip">dữ liệu máy chủ</span></h1>
   <div class="subtitle">Hai cách nạp: chuyển khoản QR (mã QR riêng chứa đúng số tiền + nội dung — hệ thống khớp tự động) hoặc thẻ cào 9 nhà mạng. Tiền dùng mua Plugin.</div>
   <div class="grid3" style="margin-bottom:14px">
     <div class="kpi"><div class="lbl">Số dư ví hiện tại</div><div class="val gold">${fmtVND(u.balance||0)}</div>
-      <div class="muted">Nạp tiền + hoa hồng + admin cấp — lưu trên server</div></div>
+      <div class="muted">Nạp tiền + hoa hồng + quản trị viên cấp — lưu trên máy chủ</div></div>
     <div class="kpi"><div class="lbl">Chiết khấu thẻ cào — mức chung</div><div class="val teal">${rates.global}%</div>
       <div class="muted">Nhà mạng có mức riêng sẽ ghi kèm % khi chọn</div></div>
     <div class="kpi"><div class="lbl">Giao dịch gần nhất</div><div class="val" style="font-size:1.05rem">${mine[0] ? esc((mine[0].kind==='card'?'Thẻ '+mine[0].carrier:'QR') + ' · ' + (mine[0].status||'')) : '—'}</div>
@@ -3812,7 +3812,7 @@ ROUTES['#/u/wallet'] = { title:'Nạp tiền vào ví', user:true, html(){
         <div class="form-row" style="max-width:200px"><label>Số tiền nạp (đ)</label><input id="w-amt" type="number" min="10000" step="1000" value="100000"></div>
         <button class="btn btn-p" data-act="w-create-qr">Tạo mã QR nạp tiền</button>
       </div>
-      <p class="muted" style="margin-top:6px">Server tạo yêu cầu nạp + mã QR Napas chứa <b>đúng số tiền + nội dung "NAP &lt;tên&gt; &lt;mã&gt;"</b> — webhook ngân hàng hoặc admin khớp nội dung để tự cộng ví.</p>
+      <p class="muted" style="margin-top:6px">Máy chủ tạo yêu cầu nạp + mã QR Napas chứa <b>đúng số tiền + nội dung "NAP &lt;tên&gt; &lt;mã&gt;"</b> — webhook ngân hàng hoặc admin khớp nội dung để tự cộng ví.</p>
       ${W_QR ? `
       <div style="text-align:center;margin:12px 0" id="wqr">${qrImgHTML(W_QR.qrPayload, 236)}</div>
       <table class="tbl"><tbody>
@@ -3936,40 +3936,41 @@ let A2_VIEW = null, A2_FILTER = 'all';
 
 /* ---- A1 Dashboard — số liệu thật từ server ---- */
 /* 5 NHÓM chức năng quản trị (dùng cho dashboard + giữ đồng bộ với nav) */
+/* MÃ CŨ (đã bỏ khỏi nhãn hiển thị 24/11/2026, giữ ở đây để quản lý): A6 Quản lý người dùng · A11 Cấp tiền · A5 Giới thiệu · A20 Nâng/hạ cấp VIP · A21 Tạo key · A13 Mốc giá · A14 Plugin · A15 Đơn hàng · A16 Nạp tiền · A3 Coupon · A12 Chiết khấu · A19 Ngân hàng · A18 Thống kê · A4 Gửi thông báo · A8 Changelog · A17 Đánh giá · A2 Ticket · A1 Dashboard · A9 Server · A10 Backup · A7 Xuất CSV */
 const AGROUPS = [
   ['Người dùng & phân quyền', '👥', '#5aa9e6', [
-    ['#/a/users', 'A6 Quản lý người dùng', 'Danh sách, khóa/mở khóa tài khoản vi phạm'],
-    ['#/a/credit', '💰 A11 Cấp tiền vào ví', 'Hỗ trợ khách, hoàn tiền, khuyến mãi ví'],
-    ['#/a/referrals', 'A5 Giới thiệu (referral)', 'Duyệt hoa hồng giới thiệu']
+    ['#/a/users', 'Quản lý người dùng', 'Danh sách, khóa/mở khóa tài khoản vi phạm'],
+    ['#/a/credit', '💰 Cấp tiền vào ví', 'Hỗ trợ khách, hoàn tiền, khuyến mãi ví'],
+    ['#/a/referrals', 'Giới thiệu (hoa hồng)', 'Duyệt hoa hồng giới thiệu']
   ]],
-  ['License & Key', '🎫', '#f0b642', [
-    ['#/a/grant-vip', '⬆⬇ A20 Nâng/hạ cấp VIP', 'Nâng lên VIP hoặc hạ về FREE — ghi nhật ký đầy đủ'],
-    ['#/a/mint-key', '🔑 A21 Tạo key thủ công', 'Sinh key gán user hoặc key rời để phát sau'],
-    ['#/a/pricing', 'A13 Mốc thời hạn & giá', 'Sửa số ngày / giá / % giảm của 4 mốc'],
-    ['#/a/plugins', 'A14 Quản lý Plugin', 'Thêm/sửa/xóa Plugin, upload file']
+  ['Key bản quyền', '🎫', '#f0b642', [
+    ['#/a/grant-vip', '⬆⬇ Nâng/hạ cấp VIP', 'Nâng lên VIP hoặc hạ về FREE — ghi nhật ký đầy đủ'],
+    ['#/a/mint-key', '🔑 Tạo key thủ công', 'Sinh key gán user hoặc key rời để phát sau'],
+    ['#/a/pricing', 'Mốc thời hạn & giá', 'Sửa số ngày / giá / % giảm của 4 mốc'],
+    ['#/a/plugins', 'Quản lý Plugin', 'Thêm/sửa/xóa Plugin, tải lên file']
   ]],
   ['Tài chính & ví', '💰', '#3ec9a7', [
-    ['#/a/orders', '📦 A15 Đơn hàng', 'Duyệt đơn chuyển khoản, xem license'],
-    ['#/a/deposits', 'A16 Nạp tiền', 'Duyệt nạp thẻ cào + QR ngân hàng'],
-    ['#/a/coupons', 'A3 Coupon', 'Tạo/mã giảm giá, bật/tắt'],
-    ['#/a/topup-rates', 'A12 Chiết khấu thẻ cào', 'Tỉ lệ quy đổi theo nhà mạng'],
-    ['#/a/bank', '🏦 A19 Ngân hàng nhận tiền', 'Cấu hình tài khoản + QR Napas'],
-    ['#/a/stats', 'A18 Thống kê', 'Doanh thu, user, biểu đồ']
+    ['#/a/orders', '📦 Đơn hàng', 'Duyệt đơn chuyển khoản, xem license'],
+    ['#/a/deposits', 'Nạp tiền', 'Duyệt nạp thẻ cào + QR ngân hàng'],
+    ['#/a/coupons', 'Mã giảm giá', 'Tạo/mã giảm giá, bật/tắt'],
+    ['#/a/topup-rates', 'Chiết khấu thẻ cào', 'Tỉ lệ quy đổi theo nhà mạng'],
+    ['#/a/bank', '🏦 Ngân hàng nhận tiền', 'Cấu hình tài khoản + QR Napas'],
+    ['#/a/stats', 'Thống kê', 'Doanh thu, người dùng, biểu đồ']
   ]],
   ['Nội dung & hỗ trợ', '📣', '#c792ea', [
-    ['#/a/broadcast', 'A4 Gửi thông báo', 'Thông báo đến toàn bộ hoặc 1 user'],
-    ['#/a/changelog', 'A8 Changelog', 'Đăng bản cập nhật plugin'],
-    ['#/a/reviews', 'A17 Đánh giá', 'Duyệt/ẩn đánh giá của khách'],
-    ['#/a/tickets', '🎫 A2 Ticket hỗ trợ', 'Trả lời, xử lý yêu cầu hỗ trợ']
+    ['#/a/broadcast', 'Gửi thông báo', 'Thông báo đến toàn bộ hoặc 1 người dùng'],
+    ['#/a/changelog', 'Quản lý cập nhật', 'Đăng bản cập nhật plugin'],
+    ['#/a/reviews', 'Đánh giá', 'Duyệt/ẩn đánh giá của khách'],
+    ['#/a/tickets', '🎫 Phiếu hỗ trợ', 'Trả lời, xử lý yêu cầu hỗ trợ']
   ]],
   ['Hệ thống', '⚙', '#ef6f6f', [
-    ['#/a/dashboard', 'A1 Dashboard', 'Trang này — số liệu tổng quan'],
-    ['#/a/serverstats', 'A9 Server', 'Máy chủ hoạt động của license'],
-    ['#/a/backup', 'A10 Backup DB', 'Tải bản sao lưu dữ liệu'],
-    ['#/a/export', 'A7 Xuất CSV', 'Đơn hàng, user, license ra CSV']
+    ['#/a/dashboard', 'Tổng quan', 'Trang này — số liệu tổng quan'],
+    ['#/a/serverstats', 'Máy chủ', 'Máy chủ hoạt động của license'],
+    ['#/a/backup', 'Sao lưu dữ liệu', 'Tải bản sao lưu dữ liệu'],
+    ['#/a/export', 'Xuất dữ liệu', 'Đơn hàng, người dùng, key ra CSV']
   ]]
 ];
-ROUTES['#/a/dashboard'] = { title:'Dashboard', admin:true, html(){
+ROUTES['#/a/dashboard'] = { title:'Tổng quan', admin:true, html(){
   const R = (S.admin||{}).revenue || {days:[], byProduct:[]};
   const today = (R.days||[])[13] || {};
   const week = (R.days||[]).slice(7).reduce((s,d)=>s+d.revenue,0);
@@ -3978,8 +3979,8 @@ ROUTES['#/a/dashboard'] = { title:'Dashboard', admin:true, html(){
   const allLics = 0; /* licenses count qua purchases/gói */
   const pendingDep = (S.admin.allDeposits||[]).filter(d=>d.status==='Chờ duyệt'||d.status==='Chờ xác nhận'||d.status==='Chờ chuyển khoản').length;
   return `
-  <h1 class="pagetitle">⚙ Dashboard tổng quan<span class="tagchip">số liệu server thật</span></h1>
-  <div class="subtitle">Doanh thu tính từ đơn "Đã thanh toán" trong database server (không phải dữ liệu trình duyệt).</div>
+  <h1 class="pagetitle">⚙ Tổng quan<span class="tagchip">số liệu máy chủ thật</span></h1>
+  <div class="subtitle">Doanh thu tính từ đơn "Đã thanh toán" trong máy chủ dữ liệu (không phải dữ liệu trình duyệt).</div>
   <div class="grid4">
     <div class="kpi"><div class="lbl">Doanh thu hôm nay</div><div class="val gold">${money(today.revenue||0)}</div><div class="muted">${today.orders||0} đơn</div></div>
     <div class="kpi"><div class="lbl">Doanh thu 7 ngày</div><div class="val gold">${money(week)}</div></div>
@@ -4013,7 +4014,7 @@ ROUTES['#/a/dashboard'] = { title:'Dashboard', admin:true, html(){
 }};
 
 /* ---- A2 Ticket (trả lời + chat) ---- */
-ROUTES['#/a/tickets'] = { title:'Quản lý ticket', admin:true, html(){
+ROUTES['#/a/tickets'] = { title:'Quản lý phiếu hỗ trợ', admin:true, html(){
   const f = A2_FILTER;
   const list = (S.admin.allTickets||[]).filter(t => f==='all' || t.status===f);
   const t = A2_VIEW ? (S.admin.allTickets||[]).find(x=>x.id===A2_VIEW) : null;
@@ -4055,16 +4056,16 @@ ROUTES['#/a/tickets'] = { title:'Quản lý ticket', admin:true, html(){
   </div>` : ''}`;
 }};
 ACTIONS['a2-view'] = d => { A2_VIEW = d.id; render(); };
-ACTIONS['a2-close'] = d => mutate('admin', {act:'ticket-close', id: d.id}, 'Đã đóng ticket.');
-FORMS['a2-reply'] = d => mutate('admin', {act:'ticket-reply', id: d.id, body: d.body}, 'Đã trả lời ticket.');
+ACTIONS['a2-close'] = d => mutate('admin', {act:'ticket-close', id: d.id}, 'Đã đóng phiếu hỗ trợ.');
+FORMS['a2-reply'] = d => mutate('admin', {act:'ticket-reply', id: d.id, body: d.body}, 'Đã trả lời phiếu hỗ trợ.');
 ACTIONS['a2-filter'] = (d, el) => { A2_FILTER = el.value; A2_VIEW = null; render(); };
 
 /* ---- A3 Coupon ---- */
-ROUTES['#/a/coupons'] = { title:'Quản lý coupon', admin:true, html(){
+ROUTES['#/a/coupons'] = { title:'Quản lý mã giảm giá', admin:true, html(){
   const list = (S.admin.coupons||[]);
   return `
   <h1 class="pagetitle">🎟 Mã giảm giá<span class="tagchip">dùng được cho mọi đơn hàng</span></h1>
-  <div class="subtitle">Tạo coupon: % giảm, giới hạn số lần dùng, ngày hết hạn. Khách dùng khi đặt hàng (server kiểm tra lượt + hạn).</div>
+  <div class="subtitle">Tạo mã giảm giá: % giảm, giới hạn số lần dùng, ngày hết hạn. Khách dùng khi đặt hàng (server kiểm tra lượt + hạn).</div>
   <div class="card"><h3>Tạo mã mới</h3>
     <form data-form="a3-new" class="form-inline">
       <div class="form-row"><label>Mã (viết hoa)</label><input name="code" required placeholder="VD: SUMMER25"></div>
@@ -4096,26 +4097,26 @@ ACTIONS['a3-del'] = d => mutate('admin', {act:'coupon-del', code: d.code}, 'Đã
 ROUTES['#/a/broadcast'] = { title:'Gửi thông báo', admin:true, html(){
   const sent = (S.notifications||[]).filter(n=>n.to==='all');
   return `
-  <h1 class="pagetitle">📢 Broadcast toàn bộ người dùng</h1>
+  <h1 class="pagetitle">📢 Gửi thông báo toàn bộ người dùng</h1>
   <div class="subtitle">Bảo trì, cập nhật, khuyến mãi — gửi tới mọi tài khoản (hiện ngay ở mục Thông báo).</div>
   <div class="card"><h3>Soạn thông báo</h3>
     <form data-form="a4-send">
       <div class="form-inline">
         <div class="form-row"><label>Loại</label><select name="type"><option value="update">Cập nhật</option><option value="promo">Khuyến mãi</option><option value="system">Bảo trì hệ thống</option></select></div>
-        <div class="form-row"><label>Tiêu đề</label><input name="title" required placeholder="VD: Bảo trì server 02:00-03:00"></div>
+        <div class="form-row"><label>Tiêu đề</label><input name="title" required placeholder="VD: Bảo trì máy chủ 02:00-03:00"></div>
       </div>
       <div class="form-row"><label>Nội dung</label><textarea name="body" required></textarea></div>
       <button class="btn btn-p">Gửi tới tất cả ${(S.admin.users||[]).filter(u=>!u.banned).length} người dùng</button>
     </form>
   </div>
-  <div class="card"><h3>Lịch sử broadcast (${sent.length})</h3>
-    ${sent.slice(0,10).map(n=>`<div class="nitem"><div class="ntitle">${esc(n.title)}</div><div class="nbody">${esc(n.body)}</div><div class="nmeta">${fmtDate(n.date)} · bởi ${esc(n.by||'admin')}</div></div>`).join('') || '<div class="muted">Chưa gửi cái nào.</div>'}
+  <div class="card"><h3>Lịch sử gửi thông báo (${sent.length})</h3>
+    ${sent.slice(0,10).map(n=>`<div class="nitem"><div class="ntitle">${esc(n.title)}</div><div class="nbody">${esc(n.body)}</div><div class="nmeta">${fmtDate(n.date)} · bởi ${esc(n.by||'quản trị')}</div></div>`).join('') || '<div class="muted">Chưa gửi cái nào.</div>'}
   </div>`;
 }};
-FORMS['a4-send'] = d => mutate('admin', {act:'broadcast', type: d.type, title: d.title, body: d.body}, 'Đã gửi broadcast.');
+FORMS['a4-send'] = d => mutate('admin', {act:'broadcast', type: d.type, title: d.title, body: d.body}, 'Đã gửi thông báo.');
 
 /* ---- A5 Referral admin ---- */
-ROUTES['#/a/referrals'] = { title:'Quản lý referral', admin:true, html(){
+ROUTES['#/a/referrals'] = { title:'Quản lý giới thiệu', admin:true, html(){
   const list = (S.admin.allReferrals||[]);
   const top = {};
   list.forEach(r=>{ if(r.status==='approved'){ top[r.referrer]=(top[r.referrer]||0)+r.commission; } });
@@ -4170,19 +4171,20 @@ ACTIONS['a6-ban'] = d => mutate('admin', {act:'user-ban', id: d.id, banned: d.ba
 /* ---- A7 Xuất CSV ---- */
 ROUTES['#/a/export'] = { title:'Xuất dữ liệu', admin:true, html(){
   return `
-  <h1 class="pagetitle">📥 Xuất dữ liệu (Excel/CSV)<span class="tagchip">từ database server</span></h1>
+  <h1 class="pagetitle">📥 Xuất dữ liệu (Excel/CSV)<span class="tagchip">từ máy chủ dữ liệu</span></h1>
   <div class="subtitle">CSV chuẩn UTF-8 có BOM — mở trực tiếp bằng Excel.</div>
   <div class="card"><div class="pill-row">
-    <button class="btn btn-p" data-act="a7-export" data-what="users">⬇ users.csv</button>
-    <button class="btn btn-p" data-act="a7-export" data-what="orders">⬇ orders.csv</button>
-    <button class="btn btn-p" data-act="a7-export" data-what="deposits">⬇ deposits.csv</button>
-    <button class="btn btn-p" data-act="a7-export" data-what="plugins">⬇ plugins.csv</button>
+    <button class="btn btn-p" data-act="a7-export" data-what="users">⬇ Người dùng (.csv)</button>
+    <button class="btn btn-p" data-act="a7-export" data-what="orders">⬇ Đơn hàng (.csv)</button>
+    <button class="btn btn-p" data-act="a7-export" data-what="deposits">⬇ Nạp tiền (.csv)</button>
+    <button class="btn btn-p" data-act="a7-export" data-what="plugins">⬇ Sản phẩm (.csv)</button>
   </div>
   <div id="a7prev"></div>
   </div>`;
 }};
 ACTIONS['a7-export'] = d => {
   const A = S.admin || {};
+  const VNLBL = {users:'Người dùng', orders:'Đơn hàng', deposits:'Nạp tiền', plugins:'Sản phẩm'};
   let head, rows;
   if(d.what==='users'){
     head = ['username','email','role','points','balance','banned','created_at'];
@@ -4200,40 +4202,40 @@ ACTIONS['a7-export'] = d => {
   }
   const csv = '\ufeff' + [head.join(','), ...rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(','))].join('\n');
   downloadFile(d.what + '.csv', csv, 'text/csv;charset=utf-8');
-  document.getElementById('a7prev').innerHTML = `<h4>Xem trước ${esc(d.what)}.csv (${rows.length} dòng)</h4>
+  document.getElementById('a7prev').innerHTML = `<h4>Xem trước ${esc(VNLBL[d.what]||d.what)}.csv (${rows.length} dòng)</h4>
   <div class="tbl-wrap"><table class="tbl"><thead><tr>${head.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead>
   <tbody>${rows.slice(0,5).map(r=>`<tr>${r.map(c=>`<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
-  toast('Đã xuất ' + d.what + '.csv (' + rows.length + ' dòng)');
+  toast('Đã xuất ' + (VNLBL[d.what]||d.what) + '.csv (' + rows.length + ' dòng)');
 };
 
 /* ---- A8 Changelog admin ---- */
-ROUTES['#/a/changelog'] = { title:'Đăng changelog', admin:true, html(){
+ROUTES['#/a/changelog'] = { title:'Đăng bản cập nhật', admin:true, html(){
   const list = (S.public.changelog||[]);
   return `
-  <h1 class="pagetitle">📝 Đăng changelog phiên bản mới</h1>
-  <div class="subtitle">Hiện ngay tại mục Changelog của người dùng + gửi thông báo tự động.</div>
+  <h1 class="pagetitle">📝 Đăng phiên bản cập nhật mới</h1>
+  <div class="subtitle">Hiện ngay tại mục Cập nhật của người dùng + gửi thông báo tự động.</div>
   <div class="card"><h3>Đăng phiên bản mới</h3>
     <form data-form="a8-new">
       <div class="form-inline">
-        <div class="form-row"><label>Version</label><input name="version" required placeholder="VD: 3.16.9.1"></div>
+        <div class="form-row"><label>Phiên bản</label><input name="version" required placeholder="VD: 3.16.9.1"></div>
         <div class="form-row" style="max-width:170px"><label>Ngày</label><input name="date" type="date" value="${iso(new Date(Date.now()+7*3600*1000))}" required></div>
       </div>
       <div class="form-row"><label>Tiêu đề</label><input name="title" required placeholder="VD: Sửa model Hải Đường"></div>
       <div class="form-row"><label>Các thay đổi (mỗi dòng một mục)</label><textarea name="items" required></textarea></div>
-      <button class="btn btn-p">Đăng changelog</button>
+      <button class="btn btn-p">Đăng bản cập nhật</button>
     </form>
   </div>
   <div class="card"><h3>Các phiên bản đã đăng (${list.length})</h3>
     ${list.map(c=>`<div class="nitem"><div class="ntitle">v${esc(c.version)} — ${esc(c.title)} <span class="badge b-info">${fmtDate(c.date)}</span></div><div class="nbody">${(c.items||[]).length} mục thay đổi</div></div>`).join('')}
   </div>`;
 }};
-FORMS['a8-new'] = d => mutate('admin', {act:'changelog-new', version: d.version, date: d.date, title: d.title, items: d.items}, 'Đã đăng changelog.');
+FORMS['a8-new'] = d => mutate('admin', {act:'changelog-new', version: d.version, date: d.date, title: d.title, items: d.items}, 'Đã đăng bản cập nhật.');
 
 /* ---- A9 Server stats (license theo server) ---- */
-ROUTES['#/a/serverstats'] = { title:'Thống kê license', admin:true, html(){
+ROUTES['#/a/serverstats'] = { title:'Máy chủ & license', admin:true, html(){
   return `
-  <h1 class="pagetitle">🌐 Thống kê license</h1>
-  <div class="subtitle">License sinh từ đơn đã thanh toán (server). Key hiện dạng ẩn để bảo mật — cần key đầy đủ dùng tra cứu hoặc xem log cấp license trong khu quản trị (Nâng cấp VIP / Tạo key).</div>
+  <h1 class="pagetitle">🌐 Máy chủ & license</h1>
+  <div class="subtitle">License sinh từ đơn đã thanh toán (máy chủ). Key hiện dạng ẩn để bảo mật — cần key đầy đủ dùng tra cứu hoặc xem log cấp license trong khu quản trị (Nâng cấp VIP / Tạo key).</div>
   <div class="card"><h3>License đang cấp (${(S.admin.allOrders||[]).filter(o=>o.status==='Đã thanh toán'&&o.license&&o.license!=='—').length})</h3>
     <div class="tbl-wrap"><table class="tbl">
       <thead><tr><th>Đơn</th><th>Khách</th><th>Key (ẩn)</th><th>Gói</th><th>Ngày</th></tr></thead>
@@ -4247,16 +4249,16 @@ ROUTES['#/a/serverstats'] = { title:'Thống kê license', admin:true, html(){
 }};
 
 /* ---- A10 Backup / restore ---- */
-ROUTES['#/a/backup'] = { title:'Backup & restore', admin:true, html(){
+ROUTES['#/a/backup'] = { title:'Sao lưu & phục hồi', admin:true, html(){
   return `
-  <h1 class="pagetitle">💾 Sao lưu & khôi phục<span class="tagchip">database server</span></h1>
-  <div class="subtitle">Tải toàn bộ database (JSON) hoặc khôi phục từ file backup.</div>
+  <h1 class="pagetitle">💾 Sao lưu & khôi phục<span class="tagchip">máy chủ dữ liệu</span></h1>
+  <div class="subtitle">Tải toàn bộ dữ liệu (JSON) hoặc khôi phục từ file sao lưu.</div>
   <div class="grid2">
-    <div class="card"><h3>⬇ Backup thủ công</h3>
-      <button class="btn btn-p" data-act="a10-backup">Tạo backup + tải JSON</button>
-      <p class="muted" style="margin-top:8px">Backup chứa users, orders, deposits, plugins, settings... (KHÔNG chứa session + mật khẩu dạng hash gốc).</p>
+    <div class="card"><h3>⬇ Sao lưu thủ công</h3>
+      <button class="btn btn-p" data-act="a10-backup">Tạo bản sao lưu + tải JSON</button>
+      <p class="muted" style="margin-top:8px">Bản sao lưu chứa người dùng, đơn hàng, nạp tiền, sản phẩm, cài đặt… (KHÔNG chứa phiên đăng nhập + mật khẩu dạng hash gốc).</p>
     </div>
-    <div class="card"><h3>⬆ Khôi phục (restore)</h3>
+    <div class="card"><h3>⬆ Phục hồi từ bản sao lưu</h3>
       <form data-form="a10-restore">
         <div class="form-row"><textarea name="json" id="restoreta" style="min-height:150px" placeholder='{"users":[...]}' required></textarea></div>
         <button class="btn btn-t">Khôi phục ngay</button>
@@ -4270,7 +4272,7 @@ ACTIONS['a10-backup'] = async () => {
   if(!r.ok){ toast(r.msg, true); return; }
   const json = JSON.stringify(r.state, null, 1);
   downloadFile('daula-backup-' + iso(new Date()) + '.json', json, 'application/json');
-  toast('💾 Đã tải backup (' + (json.length/1024).toFixed(1) + ' KB)');
+  toast('💾 Đã tải bản sao lưu (' + (json.length/1024).toFixed(1) + ' KB)');
 };
 FORMS['a10-restore'] = async (d) => {
   const r = await API('admin', {act:'restore', json: d.json});
@@ -4282,12 +4284,12 @@ FORMS['a10-restore'] = async (d) => {
 ROUTES['#/a/credit'] = { title:'Cấp tiền vào ví', admin:true, html(){
   const log = (S.admin.creditLog||[]);
   return `
-  <h1 class="pagetitle">💰 Nạp tiền trực tiếp vào ví<span class="tagchip">ghi sổ ví server</span></h1>
-  <div class="subtitle">Cộng ngay vào số dư ví trên server — người dùng thấy tức thì, kèm thông báo + log.</div>
+  <h1 class="pagetitle">💰 Nạp tiền trực tiếp vào ví<span class="tagchip">ghi sổ ví máy chủ</span></h1>
+  <div class="subtitle">Cộng ngay vào số dư ví trên máy chủ — người dùng thấy tức thì, kèm thông báo + log.</div>
   <div class="card"><h3>Phiếu cấp tiền</h3>
     <form data-form="a11-credit">
       <div class="form-inline">
-        <div class="form-row"><label>Username hoặc email người nhận</label><input name="who" list="a11-users" required placeholder="Gõ hoặc chọn username"><datalist id="a11-users">${(S.admin.users||[]).map(x=>`<option value="${esc(x.username)}">`).join('')}</datalist></div>
+        <div class="form-row"><label>Tên tài khoản hoặc email người nhận</label><input name="who" list="a11-users" required placeholder="Gõ hoặc chọn tên tài khoản"><datalist id="a11-users">${(S.admin.users||[]).map(x=>`<option value="${esc(x.username)}">`).join('')}</datalist></div>
         <div class="form-row" style="max-width:180px"><label>Số tiền (đ)</label><input name="amount" type="number" min="1000" step="1000" value="100000" required></div>
         <div class="form-row" style="max-width:210px"><label>Lý do</label><select name="reason">
           <option>Tặng thưởng</option><option selected>Khuyến mãi</option><option>Bồi thường</option><option>Sửa lỗi hệ thống</option><option>Thưởng sự kiện</option><option>Khác</option></select></div>
@@ -4368,7 +4370,7 @@ FORMS['a12-rates'] = d => {
 ROUTES['#/a/pricing'] = { title:'Mốc thời hạn + giá', admin:true, html(){
   const ts = getTiers();
   return `
-  <h1 class="pagetitle">🏷 Mốc thời hạn + giá + giảm giá<span class="tagchip">lưu server, áp dụng ngay</span></h1>
+  <h1 class="pagetitle">🏷 Mốc thời hạn + giá + giảm giá<span class="tagchip">lưu trên máy chủ, áp dụng ngay</span></h1>
   <div class="subtitle">Mô hình bán: CHỈ 1 loại license theo THỜI HẠN — 4 mốc. Sửa được <b>số ngày</b> từng mốc (VD đổi 30 → 60 ngày), <b>giá</b> và <b>% giảm giá riêng</b> cho từng mốc. Số ngày = 0 là Vĩnh viễn. Thay đổi áp dụng NGAY ở trang chủ + cửa hàng.</div>
   <div class="card"><h3>Bảng mốc hiện tại</h3>
     <form data-form="a13-pricing">
@@ -4403,22 +4405,22 @@ ROUTES['#/a/grant-vip'] = { title:'Nâng cấp VIP', admin:true, html(){
   const lv = (S.admin||{}).levelLog||[];
   return `
   <h1 class="pagetitle">⬆ Nâng cấp VIP cho tài khoản<span class="tagchip">không cần khách thanh toán</span></h1>
-  <div class="subtitle">Cấp trực tiếp license theo mốc thời hạn (30/180/365 ngày hoặc Vĩnh viễn) cho 1 tài khoản bất kỳ — hỗ trợ, khuyến mãi, xử lý khiếu nại. Server sinh key, gán vào tài khoản và thông báo cho khách ngay.</div>
+  <div class="subtitle">Cấp trực tiếp license theo mốc thời hạn (30/180/365 ngày hoặc Vĩnh viễn) cho 1 tài khoản bất kỳ — hỗ trợ, khuyến mãi, xử lý khiếu nại. Máy chủ sinh key, gán vào tài khoản và thông báo cho khách ngay.</div>
   <div class="card"><h3>Chọn tài khoản + mốc thời hạn</h3>
     <form data-form="a20-grant">
       <div class="form-inline">
-        <div class="form-row" style="flex:2"><label>Tài khoản (username hoặc email)</label><input name="who" required placeholder="VD: khach1 hoặc khach1@gmail.com"></div>
+        <div class="form-row" style="flex:2"><label>Tài khoản (tên đăng nhập hoặc email)</label><input name="who" required placeholder="VD: khach1 hoặc khach1@gmail.com"></div>
         <div class="form-row"><label>Mốc thời hạn</label><select name="tierId">${ts.map(t=>`<option value="${esc(t.id)}">${tierLabel(t)} — hiển thị ${fmtVND(Math.round(t.price*(100-(t.sale||0))/100))}</option>`).join('')}</select></div>
-        <div class="form-row" style="flex:2"><label>Lý do (ghi log + thông báo)</label><input name="reason" placeholder="VD: bồi thường sự cố server / tặng quảng cáo"></div>
+        <div class="form-row" style="flex:2"><label>Lý do (ghi log + thông báo)</label><input name="reason" placeholder="VD: bồi thường sự cố máy chủ / tặng quảng cáo"></div>
         <button class="btn btn-p">⬆ Nâng cấp ngay</button>
       </div>
     </form>
-    ${A20_RESULT ? `<div class="ok-msg" style="margin-top:12px">${esc(A20_RESULT.msg)} ${A20_RESULT.key ? `<button class="btn btn-sm" data-act="copy-key" data-key="${esc(A20_RESULT.key)}">📋 Copy key</button>` : ''}</div>` : ''}
+    ${A20_RESULT ? `<div class="ok-msg" style="margin-top:12px">${esc(A20_RESULT.msg)} ${A20_RESULT.key ? `<button class="btn btn-sm" data-act="copy-key" data-key="${esc(A20_RESULT.key)}">📋 Sao chép key</button>` : ''}</div>` : ''}
   </div>
   <div class="card" style="border-color:#ef6f6f"><h3>⬇ Hạ cấp VIP → FREE (A22 — admin hạ thủ công)</h3>
     <div class="subtitle" style="margin-bottom:8px">Thu hồi toàn bộ license VIP còn hạn (GIỮ BẢN GHI, không xóa dữ liệu), cấp key bản FREE (DF) nếu tài khoản chưa có, ghi nhật ký + thông báo khách. VIP hết hạn sẽ tự hạ về FREE ở server mà không cần bấm nút này.</div>
     <form data-form="a22-demote" class="form-inline">
-      <div class="form-row" style="flex:2"><label>Tài khoản (username hoặc email)</label><input name="who" required placeholder="VD: khach1"></div>
+      <div class="form-row" style="flex:2"><label>Tài khoản (tên đăng nhập hoặc email)</label><input name="who" required placeholder="VD: khach1"></div>
       <div class="form-row" style="flex:2"><label>Lý do (ghi log + thông báo)</label><input name="reason" placeholder="VD: khách yêu cầu / xử lý khiếu nại"></div>
       <button class="btn btn-d">⬇ Hạ về FREE</button>
     </form>
@@ -4469,7 +4471,7 @@ ROUTES['#/a/mint-key'] = { title:'Tạo key thủ công', admin:true, html(){
       <button class="btn btn-p">🔑 Tạo key</button>
     </form>
     <p class="muted" style="font-size:.8rem">🔐 Key tạo ra hiển thị ĐẦY ĐỦ đúng 1 lần trong ô kết quả (copy giao cho người dùng) — sau đó mọi nơi khác chỉ hiện dạng ẩn.</p>
-    ${A21_RESULT ? `<div class="ok-msg" style="margin-top:10px">${esc(A21_RESULT.msg)} ${A21_RESULT.key ? `<button class="btn btn-sm" data-act="copy-key" data-key="${esc(A21_RESULT.key)}">📋 Copy key</button>` : ''}</div>` : ''}
+    ${A21_RESULT ? `<div class="ok-msg" style="margin-top:10px">${esc(A21_RESULT.msg)} ${A21_RESULT.key ? `<button class="btn btn-sm" data-act="copy-key" data-key="${esc(A21_RESULT.key)}">📋 Sao chép key</button>` : ''}</div>` : ''}
   </div>
   <div class="card"><h3>🔑 Key rời chưa gán (${loose.length})</h3>
     <div class="tbl-wrap"><table class="tbl">
@@ -4480,7 +4482,7 @@ ROUTES['#/a/mint-key'] = { title:'Tạo key thủ công', admin:true, html(){
         <td class="muted">${l.via ? esc(l.via) : '—'}</td>
         <td><form data-form="a21-assign" class="form-inline" style="margin:0">
           <input type="hidden" name="key" value="${esc(l.key)}">
-          <div class="form-row" style="margin:0"><input name="who" required placeholder="username/email" style="max-width:180px"></div>
+          <div class="form-row" style="margin:0"><input name="who" required placeholder="tên đăng nhập/email" style="max-width:180px"></div>
           <button class="btn btn-sm btn-t">📎 Gán</button>
         </form></td>
       </tr>`).join('') || '<tr><td colspan="4" class="muted">Không có key rời — mọi key đã được gán tài khoản.</td></tr>'}</tbody>
@@ -4506,10 +4508,10 @@ let A14_EDIT = null, A15_VIEW = null;
 ROUTES['#/a/plugins'] = { title:'Quản lý Plugin', admin:true, html(){
   const e = A14_EDIT ? (S.plugins||[]).find(p=>p.id===A14_EDIT) : null;
   return `
-  <h1 class="pagetitle">🛒 Quản lý Plugin<span class="tagchip">thêm/sửa/xóa + upload file</span></h1>
-  <div class="subtitle">Sản phẩm ở đây bán ngay trên Cửa hàng. Upload file ≤3.5MB (zip/jar) hoặc gắn URL https cho file lớn (server proxy tải, không lộ link).</div>
-  <div class="card"><h3>📤 Upload file bản mới — bản VIP &amp; bản FREE (thay thế file hiện có + ghi phiên bản)</h3>
-    <div class="subtitle">Chọn file mới + nhập số phiên bản → file cũ bị xóa khỏi server, mọi người dùng bấm tải sẽ nhận ngay file mới nhất theo bản của họ (bản VIP tải qua license, bản FREE qua kho đã mua).</div>
+  <h1 class="pagetitle">🛒 Quản lý Plugin<span class="tagchip">thêm/sửa/xóa + tải lên file</span></h1>
+  <div class="subtitle">Sản phẩm ở đây bán ngay trên Cửa hàng. Tải lên file ≤3.5MB (zip/jar) hoặc gắn URL https cho file lớn (máy chủ trung gian tải hộ, không lộ link).</div>
+  <div class="card"><h3>📤 Tải lên file bản mới — bản VIP &amp; bản FREE (thay thế file hiện có + ghi phiên bản)</h3>
+    <div class="subtitle">Chọn file mới + nhập số phiên bản → file cũ bị xóa khỏi máy chủ, mọi người dùng bấm tải sẽ nhận ngay file mới nhất theo bản của họ (bản VIP tải qua license, bản FREE qua kho đã mua).</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px">
       ${[['PL-MAIN','🛡 Bản VIP — Plugin chính (.jar)'],['PL-RPFREE','🎁 Bản FREE — Resource Pack (.zip)']].map(([pid, label]) => {
         const p = (S.plugins||[]).find(x=>x.id===pid) || {};
@@ -4518,11 +4520,11 @@ ROUTES['#/a/plugins'] = { title:'Quản lý Plugin', admin:true, html(){
           <div style="font-weight:700;margin-bottom:6px">${label}</div>
           <div class="muted" style="font-size:.75rem;margin-bottom:8px">File hiện tại: ${p.hasFile ? esc(p.fileName||'') + ' (' + ((p.fileSize||0)/1024).toFixed(0) + 'KB) · v' + esc(p.version||'') + (p.versionUpdatedAt ? ' · cập nhật ' + esc(p.versionUpdatedAt) : '') : 'chưa có file'}</div>
           <div class="form-row"><label>File mới (.zip/.jar, ≤3.5MB)</label><input type="file" data-fup="${pid}" accept=".zip,.jar"></div>
-          <div class="form-row"><label>Phiên bản (version number) — bắt buộc</label><input name="ver" placeholder="VD: 3.16.10" required></div>
-          <button class="btn btn-p" data-act="a14-upload-new" data-id="${pid}" style="width:100%">⬆ Upload &amp; thay thế file</button>
+          <div class="form-row"><label>Phiên bản — bắt buộc</label><input name="ver" placeholder="VD: 3.16.10" required></div>
+          <button class="btn btn-p" data-act="a14-upload-new" data-id="${pid}" style="width:100%">⬆ Tải lên &amp; thay thế file</button>
         </div>`;}).join('')}
     </div>
-    <p class="muted" style="margin-top:8px">Version mới hiển thị cho khách ngay ở Cửa hàng + nút tải trong "Kho đã mua". Bản khác (add-on…) — bấm <b>Sửa</b> từng Plugin để upload riêng.</p>
+    <p class="muted" style="margin-top:8px">Phiên bản mới hiển thị cho khách ngay ở Cửa hàng + nút tải trong "Kho đã mua". Bản khác (add-on…) — bấm <b>Sửa</b> từng Plugin để tải lên riêng.</p>
   </div>
   <div class="card"><h3>➕ Tạo Plugin mới</h3>
     <form data-form="a14-new" class="form-inline">
@@ -4567,12 +4569,12 @@ ROUTES['#/a/plugins'] = { title:'Quản lý Plugin', admin:true, html(){
     <h4 style="margin-top:14px">📎 Quản lý file tải xuống</h4>
     <form data-form="a14-upload" class="form-inline">
       <div class="form-row"><label>Chọn file (≤3.5MB — zip/jar/rp)</label><input type="file" id="a14file" accept=".zip,.jar,.rar,.7z,.png,.json" required></div>
-      <div class="form-row"><label>Phiên bản (version)</label><input id="a14ver" placeholder="VD: 3.16.10" required></div>
-      <button class="btn btn-p">⬆ Upload lên server</button>
+      <div class="form-row"><label>Phiên bản</label><input id="a14ver" placeholder="VD: 3.16.10" required></div>
+      <button class="btn btn-p">⬆ Tải lên máy chủ</button>
     </form>
     <div class="form-inline" style="margin-top:8px">
       <form data-form="a14-seturl" class="form-inline" style="flex:1">
-        <div class="form-row" style="flex:1"><label>Hoặc gắn URL https (file lớn — server proxy, không lộ link)</label><input name="url" placeholder="https://github.com/.../plugin.zip"></div>
+        <div class="form-row" style="flex:1"><label>Hoặc gắn URL https (file lớn — máy chủ trung gian tải hộ, không lộ link)</label><input name="url" placeholder="https://github.com/.../plugin.zip"></div>
         <button class="btn">Gắn URL</button>
       </form>
     </div>
@@ -4589,12 +4591,12 @@ async function uploadPluginFile(pid, fileInput, verInput){
   const f = fileInput.files[0];
   const ver = (verInput.value || '').trim();
   if(!f){ toast('Chọn file (.zip/.jar) trước.', true); return; }
-  if(f.size > 3.5*1024*1024){ toast('File quá lớn (max 3.5MB qua upload web).', true); return; }
-  if(!ver){ toast('Nhập số PHIÊN BẢN (version) — ví dụ 3.16.10.', true); return; }
-  toast('⬆ Đang upload ' + f.name + ' — v' + ver + '…');
+  if(f.size > 3.5*1024*1024){ toast('File quá lớn (tối đa 3.5MB khi tải lên web).', true); return; }
+  if(!ver){ toast('Nhập số PHIÊN BẢN — ví dụ 3.16.10.', true); return; }
+  toast('⬆ Đang tải lên ' + f.name + ' — v' + ver + '…');
   const b64 = await new Promise(res => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.readAsDataURL(f); });
   const r = await API('admin', {act:'plugin-upload', id: pid, fileName: f.name, version: ver, fileB64: b64});
-  toast(r.msg || (r.ok ? 'Upload OK' : 'Upload lỗi'), !r.ok);
+  toast(r.msg || (r.ok ? 'Tải lên thành công' : 'Tải lên lỗi'), !r.ok);
   if(r.ok){ await fetchState(true); render(); }
 }
 ACTIONS['a14-upload-new'] = async (d, el) => {
@@ -4701,7 +4703,7 @@ ROUTES['#/a/stats'] = { title:'Thống kê doanh thu', admin:true, html(){
   const paid = (S.admin.allOrders||[]).filter(o=>o.status==='Đã thanh toán');
   const custs = {}; paid.forEach(o=>custs[o.userId]=(custs[o.userId]||0)+1);
   return `
-  <h1 class="pagetitle">📊 Thống kê doanh thu<span class="tagchip">từ database server</span></h1>
+  <h1 class="pagetitle">📊 Thống kê doanh thu<span class="tagchip">từ máy chủ dữ liệu</span></h1>
   <div class="grid4">
     <div class="kpi"><div class="lbl">Tổng doanh thu</div><div class="val gold">${money(R.totalRevenue||0)}</div></div>
     <div class="kpi"><div class="lbl">Đơn thành công</div><div class="val teal">${R.totalOrders||0}</div></div>
