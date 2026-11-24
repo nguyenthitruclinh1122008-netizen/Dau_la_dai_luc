@@ -3465,7 +3465,7 @@ ROUTES['#/shop'] = { title:'Cửa hàng Plugin', html(){
     </div>
     <div class="pkg best">
       <h3 style="color:var(--tx);margin-top:0">💎 Gói VIP (Premium) — bản quyền theo thời hạn</h3>
-      <div class="price">từ <b style="color:#f0b642">${fmtVND(Math.round(Math.min(...tiers.map(t=>t.price*(100-(t.sale||0)))/100)))}</b> <span class="badge b-err">đầy đủ nhất</span></div>
+      <div class="price">từ <b style="color:#f0b642">${fmtVND(Math.round(Math.min(...tiers.map(t=>t.price*(100-(t.sale||0))))/100))}</b> <span class="badge b-err">đầy đủ nhất</span></div>
       <ul>
         <li><b>Mọi tính năng bản FREE</b> plus:</li>
         <li>Toàn bộ võ hồn VIP + hiệu ứng 3D + HUD máu võ hồn</li>
