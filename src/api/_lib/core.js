@@ -183,6 +183,19 @@ async function putFile(productId, fileName, buf, contentType){
   const meta = await blobPut(path, buf, contentType || 'application/octet-stream');
   return {fileKey: path, fileUrl: meta.downloadUrl || meta.url, fileName: safe, fileSize: buf.length};
 }
+/* liệt kê blob theo prefix (dùng cho upload jar theo phần — mục 7) */
+async function blobList(prefix){
+  const r = await fetchT(BLOB_API + '?limit=100&prefix=' + encodeURIComponent(prefix), {headers: {authorization: 'Bearer ' + BLOB_TOKEN}}, BLOB_TIMEOUT * 2);
+  if(!r.ok) throw new Error('Blob list ' + r.status);
+  return (await r.json()).blobs || [];
+}
+/* đọc 1 blob trả về Buffer NHỊ PHÂN (không JSON.parse — dùng cho part/ảnh) */
+async function blobGetRaw(pathOrUrl, ms){
+  const url = String(pathOrUrl).startsWith('http') ? pathOrUrl : BLOB_API + '/' + pathOrUrl;
+  const r = await fetchT(url, {headers: {authorization: 'Bearer ' + BLOB_TOKEN}}, ms || 30000);
+  if(!r.ok) throw new Error('Blob GET ' + String(pathOrUrl).slice(-40) + ' -> ' + r.status);
+  return Buffer.from(await r.arrayBuffer());
+}
 
 /* ---------- mật khẩu + session + 2FA ---------- */
 function hashPassword(pw){
@@ -288,6 +301,57 @@ function userLevel(st, u){
   const vip = (st.licenses || []).some(l => l.userId === u.id && isVipKey(l.key) && licActive(l));
   return vip ? 'vip' : 'free';
 }
+/* ---------- kiểm tra file ở SERVER (24/11/2026 — mục 7 & 8) ---------- */
+/* SHA-256 tính tại SERVER trên byte thật của file (không tin hash do client gửi) */
+function sha256Hex(buf){ return crypto.createHash('sha256').update(buf).digest('hex'); }
+/* file .jar/.zip là file zip: magic bytes PK\x03\x04 (bản thường), PK\x05\x06 (zip rỗng), PK\x07\x08 (spanned) */
+function isZipBytes(buf){
+  if(!buf || buf.length < 4) return false;
+  const b = buf;
+  return (b[0] === 0x50 && b[1] === 0x4B) && (b[2] === 0x03 || b[2] === 0x05 || b[2] === 0x07) && (b[3] === 0x04 || b[3] === 0x06 || b[3] === 0x08);
+}
+/* phát hiện loại ảnh THẬT theo magic bytes + kích thước — KHÔNG tin đuôi file hay MIME client gửi.
+   Trả về {ok, kind:'png'|'jpg'|'webp', w, h} hoặc {ok:false, why}. SVG/GIF/BMP bị từ chối. */
+function sniffImage(buf){
+  try{
+    const b = buf;
+    if(!b || b.length < 24) return {ok:false, why:'File quá nhỏ — không phải ảnh hợp lệ.'};
+    /* PNG: 89 50 4E 47 0D 0A 1A 0A — IHDR w/h ở byte 16..23 */
+    if(b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47){
+      return {ok:true, kind:'png', w: b.readUInt32BE(16), h: b.readUInt32BE(20)};
+    }
+    /* JPEG: FF D8 FF — quét marker SOF để lấy kích thước */
+    if(b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF){
+      let off = 2;
+      while(off + 9 < b.length){
+        if(b[off] !== 0xFF){ off++; continue; }
+        const marker = b[off + 1];
+        if(marker === 0xD8 || (marker >= 0xD0 && marker <= 0xD9)){ off += 2; continue; }
+        const len = b.readUInt16BE(off + 2);
+        if(marker >= 0xC0 && marker <= 0xCF && marker !== 0xC4 && marker !== 0xC8 && marker !== 0xCC){
+          return {ok:true, kind:'jpg', h: b.readUInt16BE(off + 5), w: b.readUInt16BE(off + 7)};
+        }
+        off += 2 + len;
+      }
+      return {ok:false, why:'File JPEG lỗi — không đọc được kích thước.'};
+    }
+    /* WebP: "RIFF"...."WEBP" rồi chunk VP8/VP8L/VP8X */
+    if(b.slice(0,4).toString('ascii') === 'RIFF' && b.slice(8,12).toString('ascii') === 'WEBP'){
+      const fourcc = b.slice(12,16).toString('ascii');
+      if(fourcc === 'VP8 '){ return {ok:true, kind:'webp', w: b.readUInt16LE(26) & 0x3FFF, h: b.readUInt16LE(28) & 0x3FFF}; }
+      if(fourcc === 'VP8L'){
+        const n = b.readUInt32LE(21);
+        return {ok:true, kind:'webp', w: (n & 0x3FFF) + 1, h: ((n >> 14) & 0x3FFF) + 1};
+      }
+      if(fourcc === 'VP8X'){
+        return {ok:true, kind:'webp', w: (b[24] | (b[25] << 8) | (b[26] << 16)) + 1, h: (b[27] | (b[28] << 8) | (b[29] << 16)) + 1};
+      }
+      return {ok:false, why:'WebP không đọc được kích thước (chunk ' + fourcc + ').'};
+    }
+    return {ok:false, why:'Chỉ nhận PNG / JPG / WebP (không nhận SVG hay loại khác) — file này không đúng định dạng ảnh.'};
+  }catch(e){ return {ok:false, why:'Không đọc được file ảnh: ' + e.message}; }
+}
+
 /* query params */
 function qOf(req){
   try{ return Object.fromEntries(new URL(req.url, 'http://x').searchParams.entries()); }
@@ -297,12 +361,13 @@ function qOf(req){
 module.exports = {
   json, ok, fail, uid, nowMs, isoDate, nowStr, vnNow, vnDate, vnStr,
   clampInt, cleanStr, sleep, fetchT, BLOB_TIMEOUT,
-  blobPut, blobDelete, withState, getState, putFile, STATE_PATH,
+  blobPut, blobDelete, withState, getState, putFile, STATE_PATH, blobList, blobGetRaw,
   hashPassword, checkPassword, newSessionToken, hashEqual,
   totpCode, verify2fa, genSecret32,
   parseCookies, sessionCookie, clearCookie,
   adminTicket, adminTicketValid, rateHit, ipOf, qOf,
-  isVipKey, isFreeKey, licActive, userLevel
+  isVipKey, isFreeKey, licActive, userLevel,
+  sha256Hex, isZipBytes, sniffImage
 };
 
 /* seedState được inject bởi seed.js (require vòng tránh lặp) */

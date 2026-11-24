@@ -34,6 +34,38 @@ module.exports = async (req, res) => {
       });
       return C.json(res, 200, out.out || out);
     }
+    /* LỆNH ƯU TIÊN 1 (24/11/2026) — nút "Nhận miễn phí" ở Cửa hàng: cấp NGAY key bản FREE (DF-…)
+       cho tài khoản đang đăng nhập, kèm đơn 0đ để có đơn hàng + nhật ký. KHÔNG cần admin duyệt. */
+    if(act === 'claim-free'){
+      const out = await C.withState(async st => {
+        const me = A.getAuth(req, st);
+        if(!me) return {out: {ok:false, auth:true, msg:'Bạn cần đăng nhập để nhận key bản FREE.'}};
+        if(me.banned) return {out: {ok:false, msg:'Tài khoản đã bị khóa.'}};
+        if(!C.rateHit('freec:' + me.id, 5, 3600 * 1000)) return {out: {ok:false, msg:'Bấm nhận quá nhiều lần — thử lại sau.'}};
+        const df = O.ensureFreeKey(st, me);
+        /* đơn 0đ lưu lịch sử (giống mẫu DH-1035) — chỉ tạo đơn khi CHƯA có đơn FREE của tài khoản này */
+        const had = (st.orders || []).find(o => o.userId === me.id && (o.items || []).some(i => i.pluginId === 'PL-FREE'));
+        let orderId = null;
+        if(!had){
+          const freePl = (st.plugins || []).find(p => p.id === 'PL-FREE');
+          const id = O.newOrderId();
+          st.orders.unshift({
+            id, userId: me.id, username: me.username,
+            package: 'Bản FREE',
+            items: [{pluginId: 'PL-FREE', name: (freePl && freePl.name) || 'Đấu La Đại Lục — Plugin bản FREE', kind: 'plugin', version: (freePl && freePl.version) || '', price: 0, sale: 0, unit: 0, qty: 1, lineTotal: 0}],
+            subtotal: 0, discount: 0, total: 0, method: '—',
+            paymentContent: 'DAULA ' + id, status: 'Đã thanh toán',
+            claimedAt: null, createdAt: C.vnStr(), date: C.vnDate(), paidAt: C.vnStr(),
+            license: df.key, note: 'Nhận miễn phí tại Cửa hàng'
+          });
+          orderId = id;
+          O.logLevel(st, {by: 'cửa hàng (nhận miễn phí)', act: 'claim-free', who: me.username, from: '(chưa có key FREE)', to: 'free', keys: [df.key], reason: 'Bấm "Nhận miễn phí" tại Cửa hàng'});
+          O.notify(st, me.id, 'license', 'Bạn nhận KEY BẢN FREE: ' + df.key, 'Key dùng VĨNH VIỄN — tải Plugin bản FREE trong mục "Tải file". Đơn xác nhận: ' + id + '.');
+        }
+        return {out: {ok:true, freeKey: df.key, masked: df.key.split('-')[0] + '-' + df.key.split('-')[1] + '-****-' + df.key.split('-').pop(), orderId, repeat: !!had}};
+      });
+      return C.json(res, 200, out.out || out);
+    }
     if(act === 'claim'){
       const out = await C.withState(async st => {
         const me = A.getAuth(req, st);

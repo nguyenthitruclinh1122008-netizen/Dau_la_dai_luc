@@ -42,7 +42,12 @@ module.exports = async (req, res) => {
         bank: {bin: bank.bin, account: bank.account, name: bank.name, shortName: bank.shortName, isSample: !!bank.isSample},
         topupRates: settings.topupRates || {global: 20, carriers: {}},
         couponsActive: (st.coupons || []).filter(c => c.active).map(c => ({code: c.code, percent: c.percent, expires: c.expires})),
-        changelog: st.changelog || []
+        changelog: st.changelog || [],
+        /* MỤC 7 (24/11/2026): bản jar MỚI NHẤT từng gói — khách đối chiếu phiên bản + SHA-256 ngay trên trang tải */
+        jarReleases: {
+          free: jarPublic(st, 'free'),
+          vip: jarPublic(st, 'vip')
+        }
       },
       plugins: (st.plugins || []).filter(p => p.published || admin).map(A.safePlugin),
       reviews: (st.reviews || []).filter(r => r.status === 'visible' || admin)
@@ -74,7 +79,10 @@ module.exports = async (req, res) => {
         creditLog: settings.creditLog || [],
         topupLog: st.deposits ? st.deposits.slice(0, 100) : [],
         walletLog: (st.walletLog || []).slice(0, 200),
-        revenue: revenueStats(st)
+        revenue: revenueStats(st),
+        /* MỤC 7: lịch sử đầy đủ các bản jar + nhật ký upload/đặt lại bản */
+        jarReleases: st.jarReleases || [],
+        jarLog: settings.jarLog || []
       };
     }
     C.json(res, 200, data);
@@ -82,6 +90,13 @@ module.exports = async (req, res) => {
     C.fail(res, 500, 'Không đọc được dữ liệu server: ' + e.message);
   }
 };
+
+/* bản jar mới nhất của 1 gói — thông tin công khai cho người dùng đối chiếu */
+function jarPublic(st, pkg){
+  const rel = (st.jarReleases || []).find(r => r.pkg === pkg && r.latest);
+  if(!rel) return null;
+  return {version: rel.version, fileName: rel.fileName, size: rel.size, sha256: rel.sha256, changelog: rel.changelog || '', at: rel.at, uploader: rel.uploader || ''};
+}
 
 function revenueStats(st){
   const days = [];

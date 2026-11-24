@@ -20,13 +20,24 @@ module.exports = async (req, res) => {
   try{
     if(act === 'lookup'){
       const key = String(body.key || '').trim().toUpperCase().replace(/\s+/g, '');
-      /* key bản VIP: DL-XXXX-XXXX (DL-VIP-9F2K-8817) · key bản FREE: DF-XXXX-XXXX (DF-FREE-0001, DF-A1B2-4837) */
-      if(!/^(DL|DF)-[A-Z0-9][A-Z0-9-]{5,40}$/.test(key)){
-        return C.json(res, 200, {ok:false, found:false, msg:'Định dạng key không hợp lệ — VIP bắt đầu bằng DL- (VD: DL-VIP-9F2K-8817), bản FREE bắt đầu bằng DF- (VD: DF-A1B2-4837).'});
+      /* LỆNH 24/11/2026: tra cứu phải nhận CẢ tiền tố cũ lẫn mới —
+         · VIP: DL-... (không đổi)
+         · FREE mới: DF-XXXX-XXXX (VD DF-A1B2-C3D9)
+         · FREE cũ (v2 ban đầu): DF-FREE-0001 — vẫn tra được
+         · FREE cũ nhất (web chính v1): FREE-XXXX-XXXX-XXXX — regex chấp nhận, nếu không có trong DB v2
+           thì báo rõ key này thuộc web chính + hướng dẫn tra cứu tại web chính (KHÔNG đụng dữ liệu web chính) */
+      if(!/^(DL|DF|FREE)-[A-Z0-9][A-Z0-9.-]{5,48}$/.test(key)){
+        return C.json(res, 200, {ok:false, found:false, msg:'Định dạng key không hợp lệ — VIP bắt đầu bằng DL- (VD: DL-VIP-9F2K-8817), bản FREE bắt đầu bằng DF- (VD: DF-A1B2-C3D9) hoặc FREE- (key cũ web chính).'});
       }
       const st = await C.getState();
       const lic = (st.licenses || []).find(l => l.key === key);
-      if(!lic) return C.json(res, 200, {ok:true, found:false, msg:'Không tìm thấy key này trong hệ thống (kiểm tra lại chính tả — VIP dạng DL-VIP-9F2K-8817, FREE dạng DF-A1B2-4837).'});
+      if(!lic){
+        if(key.startsWith('FREE-')){
+          return C.json(res, 200, {ok:true, found:false, otherSystem:true,
+            msg:'Key "FREE-" là key cũ của WEB CHÍNH (hệ thống v1) — không nằm trong dữ liệu web v2 này. Key cũ vẫn còn hiệu lực như trước, không bị ảnh hưởng. Để tra trạng thái chính xác, tra cứu tại web chính: dau-la-dai-luc-livid.vercel.app/kiem-tra.'});
+        }
+        return C.json(res, 200, {ok:true, found:false, msg:'Không tìm thấy key này trong hệ thống (kiểm tra lại chính tả — VIP dạng DL-VIP-9F2K-8817, FREE dạng DF-A1B2-C3D9).'});
+      }
       const valid = !lic.expires || new Date(lic.expires + 'T23:59:59+07:00').getTime() >= Date.now();
       const daysLeft = lic.expires ? Math.ceil((new Date(lic.expires + 'T23:59:59+07:00').getTime() - Date.now()) / 86400000) : null;
       return C.json(res, 200, {

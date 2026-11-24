@@ -102,11 +102,18 @@ function tierDefaults(){
     {id:'tvv',  days:0,   price:849000, sale:10, best:false}
   ];
 }
-/* sinh license key — bản VIP dùng tiền tố DL (DL-VIP-XXXX-XXXX); bản FREE dùng tiền tố DF (DF-XXXX-XXXX) theo yêu cầu */
+/* sinh license key — LỆNH 24/11/2026:
+   · bản FREE: tiền tố DF, định dạng DF-XXXX-XXXX (CẢ HAI nhóm đều là chữ-số A-Z0-9, ví dụ DF-A1B2-C3D9)
+   · bản VIP: GIỮ NGUYÊN tiền tố DL (DL-VIP-XXXX-9999) — không đổi gì phần VIP */
 function makeKey(kind){
-  const g = () => C.uid('K').slice(2, 6).toUpperCase().replace(/[^A-Z0-9]/g, 'X');
-  if(kind === 'FREE') return 'DF-' + g() + '-' + (1000 + Math.floor(Math.random() * 9000));
-  return 'DL-' + kind + '-' + g() + '-' + (1000 + Math.floor(Math.random() * 9000));
+  const rnd = () => {
+    const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let s = '';
+    for(let i = 0; i < 4; i++) s += A[require('crypto').randomInt(A.length)];
+    return s;
+  };
+  if(kind === 'FREE') return 'DF-' + rnd() + '-' + rnd();
+  return 'DL-' + kind + '-' + rnd() + '-' + (1000 + Math.floor(Math.random() * 9000));
 }
 /* URL dự phòng Plugin bản FREE (file mới nhất) — endpoint jar FREE của site chính,
    luôn trả bản mới nhất đang host (đọc plugin.yml trong jar_files DB). Dùng khi store chưa có Plugin PL-FREE. */

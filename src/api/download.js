@@ -30,17 +30,23 @@ module.exports = async (req, res) => {
       if(q.f === 'vip'){
         /* Plugin bản VIP (file mới nhất) — CHỈ license VIP (DL-) còn hạn; key bản FREE bị từ chối tại SERVER */
         if(!C.isVipKey(lic.key)) return C.json(res, 403, {ok:false, msg:'Key này không phải license VIP (DL-) — file VIP chỉ tải bằng license VIP còn hạn.'});
+        /* MỤC 7: ưu tiên bản jar VIP MỚI NHẤT admin upload (jarReleases) —fallback theo Plugin PL-MAIN */
+        const rel = (st.jarReleases || []).find(r => r.pkg === 'vip' && r.latest);
         const pl = (st.plugins || []).find(p => p.id === 'PL-MAIN');
-        if(!pl || !pl.fileUrl) return C.json(res, 404, {ok:false, msg:'File Plugin VIP chưa sẵn sàng — liên hệ admin.'});
-        target = {fileUrl: pl.fileUrl, fileName: pl.fileName || 'DauLaDaiLuc-Plugin-VIP-latest.zip', purchaseId: null};
+        const url = (rel && rel.fileUrl) || (pl && pl.fileUrl);
+        const name = (rel && rel.fileName) || (pl && pl.fileName) || 'DauLaDaiLuc-VIP-latest.jar';
+        if(!url) return C.json(res, 404, {ok:false, msg:'File Plugin VIP chưa sẵn sàng — liên hệ admin.'});
+        target = {fileUrl: url, fileName: name, purchaseId: null, rel};
       }
       else if(q.f === 'free'){
         /* Plugin bản FREE (file mới nhất) — cần key bản FREE (DF-) của chính tài khoản; mọi tài khoản đăng ký đều được cấp DF */
-        if(!C.isFreeKey(lic.key)) return C.json(res, 403, {ok:false, msg:'File bản FREE tải bằng KEY FREE (DF-) của bạn — check email thông báo hoặc trang "Tải file".'});
+        if(!C.isFreeKey(lic.key) && !/^FREE-/.test(lic.key)) return C.json(res, 403, {ok:false, msg:'File bản FREE tải bằng KEY FREE (DF-) của bạn — check email thông báo hoặc trang "Tải file".'});
+        /* MỤC 7: ưu tiên bản jar FREE MỚI NHẤT admin upload — fallback Plugin PL-FREE / site chính */
+        const rel = (st.jarReleases || []).find(r => r.pkg === 'free' && r.latest);
         const pl = (st.plugins || []).find(p => p.id === 'PL-FREE');
-        const url = (pl && pl.fileUrl) || O.FREE_PLUGIN_URL;
-        const name = (pl && pl.fileName) || 'DauLaDaiLuc-Free-latest.jar';
-        target = {fileUrl: url, fileName: name, purchaseId: null};
+        const url = (rel && rel.fileUrl) || (pl && pl.fileUrl) || O.FREE_PLUGIN_URL;
+        const name = (rel && rel.fileName) || (pl && pl.fileName) || 'DauLaDaiLuc-Free-latest.jar';
+        target = {fileUrl: url, fileName: name, purchaseId: null, rel};
       }
       else{
         /* link cũ (rp-full/add-on/rp-free) giữ hoạt động theo quyền tương ứng */
@@ -67,7 +73,10 @@ module.exports = async (req, res) => {
       'Content-Type': 'application/octet-stream',
       'Content-Disposition': 'attachment; filename="' + (target.fileName || 'file.zip') + '"',
       'Content-Length': buf.length,
-      'Cache-Control': 'no-store'
+      'Cache-Control': 'no-store',
+      /* MỤC 7: khách đối chiếu được bản tải về (kèm SHA-256 hiển thị trên trang Tải file) */
+      'X-Plugin-Version': (target.rel && target.rel.version) || '',
+      'X-Plugin-Sha256': (target.rel && target.rel.sha256) || ''
     });
     return res.end(buf);
   }catch(e){

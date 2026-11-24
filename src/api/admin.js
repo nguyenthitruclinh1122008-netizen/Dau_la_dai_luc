@@ -10,6 +10,22 @@ module.exports = async (req, res) => {
   try{ body = await require('./auth.js').readBody(req, 5000000); }catch(e){ return C.fail(res, 400, 'Body quá lớn hoặc không hợp lệ (tối đa ~4MB).'); }
   const act = body.act || '';
   try{
+    /* ---- MỤC 7 (24/11/2026): upload jar THEO PHẦN — mỗi request < 4,5MB, KHÔNG ghi state.
+       Chỉ ADMIN được upload — kiểm tra quyền TẠI SERVER; phần dữ liệu đẩy thẳng lên Blob tmp. ---- */
+    if(act === 'jar-part'){
+      const st0 = await C.getState();
+      const me0 = A.getAdmin(req, st0);
+      if(!me0) return C.json(res, 403, {ok:false, auth:true, msg:'Chỉ quản trị viên mới được tải file jar lên (kiểm tra ở server).'});
+      const uidv = C.cleanStr(body.uid, 40);
+      if(!/^[a-f0-9]{12,40}$/.test(uidv)) return C.fail(res, 400, 'Mã phiên upload không hợp lệ.');
+      const idx = C.clampInt(body.idx, 0, 39, -1);
+      if(idx < 0) return C.fail(res, 400, 'Chỉ số phần không hợp lệ.');
+      if(!C.rateHit('jarpart:' + me0.id, 80, 3600 * 1000)) return C.fail(res, 429, 'Upload quá nhiều phần trong 1 giờ — thử lại sau.');
+      const buf = Buffer.from(String(body.data || ''), 'base64');
+      if(!buf.length || buf.length > 3 * 1024 * 1024) return C.fail(res, 400, 'Phần dữ liệu rỗng hoặc vượt 3MB.');
+      await C.blobPut('tmp/jar/' + uidv + '/part-' + String(idx).padStart(2, '0'), buf, 'application/octet-stream');
+      return C.json(res, 200, {ok: true, idx, got: buf.length});
+    }
     const out = await C.withState(async st => {
       const me = A.getAdmin(req, st);
       if(!me) return {out: {ok:false, auth:true, msg:'Chưa mở khu vực quản trị (đăng nhập + cổng quản trị).'}};
@@ -177,6 +193,87 @@ module.exports = async (req, res) => {
         pl.fileKey = null; pl.fileUrl = url;
         pl.fileName = C.cleanStr(body.fileName, 80) || 'plugin.zip';
         return {out: {ok:true, msg:'Đã gắn file tải từ URL (server proxy — URL không lộ cho khách)'}};
+      }
+
+      /* ---------- MỤC 7 (24/11/2026): JAR THEO PHIÊN BẢN cho 2 gói FREE & VIP ----------
+         · jar-upload: file nhỏ ≤3,5MB gửi trực tiếp (server thấy byte → tự tính SHA-256)
+         · jar-done  : file lớn upload theo phần (jar-part) → server GHÉP + kiểm tra + SHA-256
+         · Lưu jarReleases (lịch sử, KHÔNG ghi đè file cũ) + jarLog (ai/lúc/bản/phiên bản)
+         · jar-latest: "đặt lại bản này làm mới nhất" — hoàn tác khi lỡ upload nhầm */
+      const JAR_MAX = 80 * 1024 * 1024;
+      const JAR_PLUGIN = {free: 'PL-FREE', vip: 'PL-MAIN'};
+      async function finalizeJar(me, buf, meta){
+        const pkg = meta.pkg;
+        if(!['free','vip'].includes(pkg)) return {ok:false, msg:'Chọn gói FREE hoặc VIP.'};
+        const ver = C.cleanStr(meta.version, 30);
+        if(!ver || !/^[A-Za-z0-9._+~-]{1,30}$/.test(ver)) return {ok:false, msg:'BẮT BUỘC nhập số phiên bản (VD: 3.16.10 — chỉ chữ, số, . _ + -).'};
+        const name = C.cleanStr(meta.fileName, 80) || 'plugin.jar';
+        if(!/\.jar$/i.test(name)) return {ok:false, msg:'Chỉ nhận file .jar — file "' + name + '" bị từ chối ở SERVER.'};
+        if(!buf.length) return {ok:false, msg:'File rỗng.'};
+        if(buf.length > JAR_MAX) return {ok:false, msg:'File quá lớn (giới hạn 80MB).'};
+        if(!C.isZipBytes(buf)) return {ok:false, msg:'File không phải ZIP/JAR hợp lệ (server kiểm tra magic bytes PK) — từ chối.'};
+        const sha = C.sha256Hex(buf);
+        /* lưu file mới — KHÔNG xóa file cũ: giữ nguyên lịch sử phiên bản */
+        const file = await C.putFile('jar-' + pkg, name, buf, 'application/java-archive');
+        st.jarReleases = st.jarReleases || [];
+        for(const r of st.jarReleases) if(r.pkg === pkg) r.latest = false;
+        const rel = {id: C.uid('JR'), pkg, version: ver, changelog: C.cleanStr(meta.changelog, 400),
+          fileName: file.fileName, fileKey: file.fileKey, fileUrl: file.fileUrl, size: buf.length,
+          sha256: sha, uploader: me.username, at: C.vnStr(), latest: true, downloads: 0};
+        st.jarReleases.unshift(rel);
+        /* đồng bộ product tương ứng (shop + tải file hiển thị đúng bản mới nhất) */
+        const pl = (st.plugins || []).find(p => p.id === JAR_PLUGIN[pkg]);
+        if(pl){ pl.fileKey = file.fileKey; pl.fileUrl = file.fileUrl; pl.fileName = file.fileName; pl.fileSize = buf.length; pl.version = ver; pl.versionUpdatedAt = C.vnStr(); }
+        S.jarLog = S.jarLog || [];
+        S.jarLog.unshift({id: C.uid('JL'), at: C.vnStr(), by: me.username, act: 'upload', pkg, version: ver, releaseId: rel.id, fileName: file.fileName, size: buf.length, sha256: sha});
+        if(S.jarLog.length > 200) S.jarLog.length = 200;
+        O.notify(st, 'admins', 'jar', 'Đã upload jar ' + pkg.toUpperCase() + ' v' + ver, me.username + ' upload ' + file.fileName + ' (' + (buf.length/1024).toFixed(0) + 'KB) — SHA-256 ' + sha.slice(0, 12) + '… — trở thành bản mới nhất của gói ' + pkg.toUpperCase() + '.');
+        /* dọn phần tạm (nếu upload theo phần) */
+        const uidv = C.cleanStr(meta.uid, 40);
+        if(/^[a-f0-9]{12,40}$/.test(uidv)){
+          try{ const ps = await C.blobList('tmp/jar/' + uidv + '/'); for(const p of ps) await C.blobDelete(p.pathname); }catch(e){}
+        }
+        return {ok:true, msg:'⬆ Đã tải lên ' + file.fileName + ' (' + (buf.length/1024).toFixed(1) + 'KB) — gói ' + pkg.toUpperCase() + ' phiên bản v' + ver + ' — SHA-256: ' + sha + ' — đây là bản MỚI NHẤT của gói này.', release: {id: rel.id, pkg, version: ver, size: buf.length, sha256: sha}};
+      }
+      if(act === 'jar-upload'){
+        if(!C.rateHit('jarup:' + me.id, 30, 3600 * 1000)) return {out: {ok:false, msg:'Upload quá 30 lần/giờ — thử lại sau.'}};
+        const buf = Buffer.from(String(body.fileB64 || ''), 'base64');
+        const r = await finalizeJar(me, buf, {pkg: body.pkg, version: body.version, changelog: body.changelog, fileName: body.fileName});
+        return {out: r};
+      }
+      if(act === 'jar-done'){
+        if(!C.rateHit('jarup:' + me.id, 30, 3600 * 1000)) return {out: {ok:false, msg:'Upload quá 30 lần/giờ — thử lại sau.'}};
+        const uidv = C.cleanStr(body.uid, 40);
+        if(!/^[a-f0-9]{12,40}$/.test(uidv)) return {out: {ok:false, msg:'Mã phiên upload không hợp lệ.'}};
+        const parts = C.clampInt(body.parts, 1, 40, 1);
+        const blobs = await C.blobList('tmp/jar/' + uidv + '/');
+        const byIdx = new Map();
+        for(const b of blobs){ const m = String(b.pathname || '').match(/part-(\d+)$/); if(m) byIdx.set(parseInt(m[1], 10), b.url); }
+        const chunks = [];
+        let total = 0;
+        for(let i = 0; i < parts; i++){
+          const url = byIdx.get(i);
+          if(!url) return {out: {ok:false, msg:'Thiếu phần ' + i + ' — tải lại phần đó rồi bấm hoàn tất.'}};
+          const ch = await C.blobGetRaw(url, 45000);
+          if(total + ch.length > JAR_MAX) return {out: {ok:false, msg:'File vượt giới hạn 80MB.'}};
+          chunks.push(ch); total += ch.length;
+        }
+        const buf = Buffer.concat(chunks, total);
+        const r = await finalizeJar(me, buf, {pkg: body.pkg, version: body.version, changelog: body.changelog, fileName: body.fileName, uid: uidv});
+        return {out: r};
+      }
+      if(act === 'jar-latest'){
+        const rel = (st.jarReleases || []).find(x => x.id === body.id);
+        if(!rel) return {out: {ok:false, msg:'Không tìm thấy phiên bản trong lịch sử.'}};
+        for(const r of st.jarReleases) if(r.pkg === rel.pkg) r.latest = false;
+        rel.latest = true; rel.restoredAt = C.vnStr(); rel.restoredBy = me.username;
+        const pl = (st.plugins || []).find(p => p.id === JAR_PLUGIN[rel.pkg]);
+        if(pl){ pl.fileKey = rel.fileKey; pl.fileUrl = rel.fileUrl; pl.fileName = rel.fileName; pl.fileSize = rel.size; pl.version = rel.version; pl.versionUpdatedAt = C.vnStr(); }
+        S.jarLog = S.jarLog || [];
+        S.jarLog.unshift({id: C.uid('JL'), at: C.vnStr(), by: me.username, act: 'set-latest', pkg: rel.pkg, version: rel.version, releaseId: rel.id, fileName: rel.fileName, size: rel.size, sha256: rel.sha256});
+        if(S.jarLog.length > 200) S.jarLog.length = 200;
+        O.notify(st, 'admins', 'jar', 'Đặt lại bản mới nhất: ' + rel.pkg.toUpperCase() + ' v' + rel.version, me.username + ' đã đặt ' + rel.fileName + ' (upload ' + rel.at + ') trở thành bản mới nhất của gói ' + rel.pkg.toUpperCase() + '.');
+        return {out: {ok:true, msg:'📌 Đã đặt ' + rel.pkg.toUpperCase() + ' v' + rel.version + ' (upload ' + rel.at + ') làm bản MỚI NHẤT — người dùng tải sẽ nhận đúng bản này.'}};
       }
 
       /* ---------- đánh giá ---------- */

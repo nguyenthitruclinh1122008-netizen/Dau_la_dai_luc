@@ -87,10 +87,45 @@ module.exports = async (req, res) => {
       const me = A.getAuth(req, st);
       if(!me) return {out: {ok:false, auth:true, msg:'Bạn chưa đăng nhập.'}};
       if(act === 'password'){
-        if(!C.checkPassword(String(body.old || ''), me.passHash)) return {out: {ok:false, msg:'Mật khẩu hiện tại không đúng.'}};
-        if(String(body.nw || '').length < 6) return {out: {ok:false, msg:'Mật khẩu mới cần tối thiểu 6 ký tự.'}};
+        /* MỤC 8 (24/11/2026): đổi mật khẩu — server kiểm mật khẩu cũ, mới tối thiểu 8 ký tự,
+           GIỚI HẠN số lần nhập sai (5 lần/15 phút), và ĐĂNG XUẤT mọi phiên đăng nhập KHÁC */
+        if(!C.rateHit('pw:' + me.id, 5, 15 * 60 * 1000)) return {out: {ok:false, msg:'Bạn đã thử đổi mật khẩu quá 5 lần trong 15 phút — chờ rồi thử lại.'}};
+        if(!C.checkPassword(String(body.old || ''), me.passHash)){
+          return {out: {ok:false, msg:'Mật khẩu hiện tại không đúng.'}};
+        }
+        if(String(body.nw || '').length < 8) return {out: {ok:false, msg:'Mật khẩu mới cần tối thiểu 8 ký tự.'}};
         me.passHash = C.hashPassword(String(body.nw));
-        return {out: {ok:true, msg:'Đã đổi mật khẩu thành công.'}};
+        /* đăng xuất mọi phiên khác: xóa mọi session của user TRỪ phiên hiện tại */
+        const curToken = C.parseCookies(req).dl_sess;
+        let killed = 0;
+        for(const k of Object.keys(st.sessions || {})){
+          if(st.sessions[k].uid === me.id && k !== curToken){ delete st.sessions[k]; killed++; }
+        }
+        O.notify(st, me.id, 'system', 'Bạn vừa đổi mật khẩu thành công', killed > 0
+          ? 'Đã đổi mật khẩu lúc ' + C.vnStr() + ' và ĐĂNG XUẤT ' + killed + ' phiên đăng nhập khác trên thiết bị khác. Nếu không phải bạn thực hiện — liên hệ admin ngay.'
+          : 'Đã đổi mật khẩu lúc ' + C.vnStr() + '. Nếu không phải bạn thực hiện — liên hệ admin ngay.');
+        return {out: {ok:true, msg:'✅ Đã đổi mật khẩu thành công.' + (killed > 0 ? ' Đã đăng xuất ' + killed + ' phiên đăng nhập khác.' : ''), killedSessions: killed}};
+      }
+      /* MỤC 8 (24/11/2026): ảnh đại diện THẬT — server kiểm tra loại file thật (magic bytes),
+         chỉ nhận PNG/JPG/WebP ≤ 2MB, kích thước đúng 256×256 (trình duyệt đã cắt vuông trước khi gửi) */
+      if(act === 'avatar-upload'){
+        if(!C.rateHit('avatar:' + me.id, 20, 3600 * 1000)) return {out: {ok:false, msg:'Đổi ảnh quá nhiều lần trong 1 giờ — thử lại sau.'}};
+        let buf;
+        try{ buf = Buffer.from(String(body.fileB64 || ''), 'base64'); }catch(e){ return {out: {ok:false, msg:'Dữ liệu ảnh không hợp lệ.'}}; }
+        if(!buf.length) return {out: {ok:false, msg:'Chưa chọn ảnh.'}};
+        if(buf.length > 2 * 1024 * 1024) return {out: {ok:false, msg:'Ảnh vượt 2MB — hãy chọn ảnh nhỏ hơn.'}};
+        const sn = C.sniffImage(buf);
+        if(!sn.ok) return {out: {ok:false, msg: sn.why || 'File không phải ảnh PNG/JPG/WebP.'}};
+        if(sn.w !== 256 || sn.h !== 256) return {out: {ok:false, msg:'Ảnh phải đúng 256×256 (trang đã tự cắt vuông — thử lại).'}};
+        const file = await C.putFile('avatar-' + me.id, 'avatar-' + sn.kind + '.' + sn.kind, buf, sn.kind === 'png' ? 'image/png' : (sn.kind === 'jpg' ? 'image/jpeg' : 'image/webp'));
+        if(me.avatarKey) await C.blobDelete(me.avatarKey);
+        me.avatar = file.fileUrl; me.avatarKey = file.fileKey; me.avatarAt = C.vnStr();
+        return {out: {ok:true, msg:'✅ Đã cập nhật ảnh đại diện (PNG/JPG/WebP 256×256, lưu trên server).', avatar: me.avatar}};
+      }
+      if(act === 'avatar-del'){
+        if(me.avatarKey) await C.blobDelete(me.avatarKey);
+        me.avatar = ''; me.avatarKey = null; me.avatarAt = null;
+        return {out: {ok:true, msg:'🗑 Đã xóa ảnh đại diện — về mặc định.'}};
       }
       if(act === 'email'){
         const email = C.cleanStr(body.email, 80);
@@ -101,7 +136,7 @@ module.exports = async (req, res) => {
       }
       if(act === 'profile'){
         me.displayName = C.cleanStr(body.displayName, 40);
-        me.avatar = C.cleanStr(body.avatar, 8);
+        if(body.avatar !== undefined && !/^https:/.test(String(body.avatar || ''))) me.avatar = C.cleanStr(body.avatar, 8);   /* emoji — không cho ghi đè URL ảnh qua form này */
         return {out: {ok:true, msg:'Đã lưu hồ sơ cá nhân.', displayName: me.displayName, avatar: me.avatar}};
       }
       if(act === '2fa-start'){

@@ -2587,7 +2587,9 @@ function buildNav(){
   const cbadge = cartCount();
   let h = `<span class="brand">⚔ ĐẤU LA ĐẠI LỤC <small>· web v2.0 (máy chủ thật)</small></span><span class="spacer"></span>`;
   if(u){
-    h += `<span class="userchip">${esc(u.avatar || '👤')} <b>${esc(u.displayName || u.username)}</b><span class="uc-role"> · ${u.role==='admin'?'Quản trị':'Thành viên'}</span><span class="uc-bal"> · 💰 <b>${fmtVND(u.balance)}</b></span></span>
+    const av = String(u.avatar || '');
+    const avHtml = av.startsWith('http') ? `<img src="${esc(av)}" alt="" style="width:22px;height:22px;border-radius:50%;object-fit:cover;vertical-align:-6px;border:1px solid var(--line)">` : esc(av || '👤');
+    h += `<span class="userchip">${avHtml} <b>${esc(u.displayName || u.username)}</b><span class="uc-role"> · ${u.role==='admin'?'Quản trị':'Thành viên'}</span><span class="uc-bal"> · 💰 <b>${fmtVND(u.balance)}</b></span></span>
           <button class="btn btn-sm" data-act="logout">Đăng xuất</button>`;
   } else {
     h += `<a class="btn btn-sm" href="#/register">Đăng ký</a><a class="btn btn-p btn-sm" href="#/login">Đăng nhập</a>`;
@@ -2615,7 +2617,7 @@ function buildNav(){
     ]));
     if(adminOK()){
       d.push(gsec('👥 Người dùng', [['#/a/users', '👤 Người dùng'], ['#/a/credit', '💰 Cấp tiền'], ['#/a/referrals', '🤝 Giới thiệu']]));
-      d.push(gsec('🔑 Key bản quyền', [['#/a/pricing', '🪜 Mốc gói & giá'], ['#/a/grant-vip', '⬆⬇ Nâng/hạ cấp VIP'], ['#/a/mint-key', '🔑 Tạo key'], ['#/a/plugins', '📦 Sản phẩm']]));
+      d.push(gsec('🔑 Key bản quyền', [['#/a/pricing', '🪜 Mốc gói & giá'], ['#/a/jar', '📤 Tải lên bản cập nhật'], ['#/a/grant-vip', '⬆⬇ Nâng/hạ cấp VIP'], ['#/a/mint-key', '🔑 Tạo key'], ['#/a/plugins', '📦 Sản phẩm']]));
       d.push(gsec('💰 Tài chính', [['#/a/orders', '🧾 Đơn hàng'], ['#/a/deposits', '💳 Duyệt nạp tiền'], ['#/a/coupons', '🏷 Mã giảm giá'], ['#/a/topup-rates', '📉 Chiết khấu'], ['#/a/bank', '🏦 Ngân hàng'], ['#/a/stats', '📊 Thống kê']]));
       d.push(gsec('📣 Nội dung', [['#/a/broadcast', '📢 Gửi thông báo'], ['#/a/changelog', '📜 Quản lý cập nhật'], ['#/a/reviews', '⭐ Đánh giá'], ['#/a/tickets', '🎫 Phiếu hỗ trợ']]));
       d.push(gsec('⚙ Hệ thống', [['#/a/dashboard', '📈 Tổng quan'], ['#/a/serverstats', '🖥 Máy chủ'], ['#/a/backup', '💾 Sao lưu'], ['#/a/export', '📤 Xuất dữ liệu']]));
@@ -2747,14 +2749,19 @@ ROUTES['#/home'] = { title:'Trang chủ', html(){
   const minTier = tiers.slice().sort((a,b)=>Math.round(a.price*(100-a.sale)/100) - Math.round(b.price*(100-b.sale)/100))[0];
   return `
   <section class="hero">
-    <h1>⚔ Đấu La Đại Lục — Plugin võ hồn cho Minecraft 1.21.1</h1>
-    <p>Hệ thống võ hồn Đấu La: Hạo Thiên Chùy, Lam Điện Bá Vương Long, Cửu Tâm Hải Đường, Huyền Vũ, U Minh Linh Miêu — kèm resource pack 2D/3D riêng cho từng license.</p>
+    <h1>⚔ WEB BÁN PLUGIN MINECRAFT — ĐẤU LA ĐẠI LỤC</h1>
+    <p>Plugin võ hồn cho Paper/Spigot 1.21.1: Hạo Thiên Chùy, Lam Điện Bá Vương Long, Cửu Tâm Hải Đường, Huyền Vũ, U Minh Linh Miêu — kèm resource pack 2D/3D riêng. <b>Bán với 2 gói: THƯỜNG (miễn phí — key DF tặng ngay) và VIP (bản quyền theo thời hạn — key DL cấp tự động sau khi thanh toán được server xác nhận).</b></p>
     <div class="pill-row" style="margin-top:12px">
       <span class="badge b-ok">Paper 1.21.1 — test thật</span>
       <span class="badge b-info">Bản mới nhất: 3.16.9 BETA10</span>
       <span class="badge b-warn">Máy chủ + cơ sở dữ liệu thật</span>
+      <span class="badge b-mut">2 gói: Thường / VIP</span>
     </div>
-    <div style="margin-top:14px"><a class="btn btn-p" href="#/shop">🛒 Mua Plugin ngay</a> ${logged?'':`<a class="btn btn-p" href="#/register">Đăng ký tài khoản</a> <a class="btn" href="#/login">Đăng nhập</a>`} <a class="btn" href="#/u/changelog">Xem cập nhật</a></div>
+    <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <a class="btn btn-p" style="font-size:1.05rem;padding:12px 22px" href="#/shop">🛒 MUA NGAY — CHỌN GÓI →</a>
+      ${logged?'':`<a class="btn btn-p" href="#/register">🎁 Đăng ký nhận key FREE</a> <a class="btn" href="#/login">Đăng nhập</a>`}
+      <a class="btn" href="#/u/changelog">Xem cập nhật</a>
+    </div>
   </section>
   <div class="card"><h3>🛒 Plugin đang bán — mua bằng QR ngân hàng, thẻ cào hoặc ví</h3>
     <div class="grid3">${feat.slice(0,3).map(p=>`
@@ -2764,8 +2771,8 @@ ROUTES['#/home'] = { title:'Trang chủ', html(){
       <a class="btn btn-p btn-sm" href="#/shop/${esc(p.id)}">Xem chi tiết & mua →</a></div>`).join('')}</div>
     <p style="margin-top:10px"><a class="btn btn-t" href="#/shop">→ Toàn bộ cửa hàng (${(S.plugins||[]).filter(p=>p.published).length} sản phẩm)</a></p>
   </div>
-  <div class="card"><h3>⏱ Chọn thời hạn bản quyền — chỉ 1 loại license, 4 mốc thời hạn</h3>
-    <div class="subtitle" style="margin-bottom:10px">Mỗi mốc có giá và ưu đãi riêng — license key tự sinh với đúng thời hạn bạn chọn (mốc Vĩnh viễn không bao giờ hết hạn).</div>
+  <div class="card"><h3>💎 Gói VIP — chọn thời hạn bản quyền (mỗi mốc có giá + ưu đãi riêng)</h3>
+    <div class="subtitle" style="margin-bottom:10px">Mỗi mốc có giá và ưu đãi riêng — license key DL-VIP tự sinh với đúng thời hạn bạn chọn ngay khi server xác nhận thanh toán (mốc Vĩnh viễn không bao giờ hết hạn).</div>
     <div class="grid4">
     ${tiers.map(t=>`<div class="pkg ${t.best?'best':''}">
       <h3 style="color:var(--tx)">${tierLabel(t)} ${t.best?'<span class="badge b-ok">Phổ biến nhất</span>':''}${(t.sale||0)>0?` <span class="badge b-err">Giảm ${t.sale}%</span>`:''}</h3>
@@ -2920,6 +2927,7 @@ ROUTES['#/u/profile'] = { title:'Hồ sơ cá nhân', user:true, html(){
       <table class="tbl"><tbody>
         <tr><td>Tên đăng nhập</td><td><b>${esc(u.username)}</b></td></tr>
         <tr><td>Email</td><td>${esc(u.email || '—')}</td></tr>
+        <tr><td>Ảnh đại diện</td><td>${String(u.avatar||'').startsWith('http') ? `<img src="${esc(u.avatar)}" alt="avatar" style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:1px solid var(--line)">` : `<span style="font-size:1.6rem">${esc(u.avatar || '👤')}</span> <span class="muted" style="font-size:.75rem">(mặc định)</span>`}</td></tr>
         <tr><td>Loại tài khoản</td><td>${u.role==='admin'?'Quản trị viên':'Thành viên'}</td></tr>
         <tr><td>Cấp độ tải file</td><td>${myLevel()==='vip' ? '<span class="badge b-ok">💎 VIP</span> — 1 mục: Plugin bản VIP' : '<span class="badge b-info">🆓 FREE</span> — 1 mục: Plugin bản FREE (key DF)'}</td></tr>
         <tr><td>Ngày tham gia</td><td>${fmtDate(u.createdAt)}</td></tr>
@@ -2930,10 +2938,23 @@ ROUTES['#/u/profile'] = { title:'Hồ sơ cá nhân', user:true, html(){
       </tbody></table>
     </div>
     <div>
-      <div class="card"><h3>🖼 Ảnh đại diện + tên hiển thị</h3>
+      <div class="card"><h3>🖼 Ảnh đại diện (PNG / JPG / WebP — tối đa 2MB)</h3>
+        <div style="display:flex;gap:14px;align-items:center;margin-bottom:10px">
+          ${String(u.avatar||'').startsWith('http')
+            ? `<img src="${esc(u.avatar)}" alt="avatar" style="width:76px;height:76px;border-radius:50%;object-fit:cover;border:2px solid var(--gold)">`
+            : `<span style="font-size:2.4rem;border:2px dashed var(--line);border-radius:50%;width:76px;height:76px;display:inline-flex;align-items:center;justify-content:center">${esc(u.avatar || '👤')}</span>`}
+          <div class="muted" style="font-size:.8rem">Server kiểm tra loại file THẬT theo magic bytes — <b>không nhận SVG</b>. Ảnh được cắt vuông chuẩn <b>256×256</b> trước khi gửi lên, lưu trên server, hiện trong hồ sơ + thanh menu.</div>
+        </div>
+        <div class="form-row"><label>Chọn ảnh mới (PNG/JPG/WebP — ≤2MB, tự cắt vuông 256×256)</label><input type="file" data-avatarfile accept="image/png,image/jpeg,image/webp"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-p" data-act="avatar-upload">⬆ Tải ảnh lên server</button>
+          ${String(u.avatar||'').startsWith('http') ? `<button class="btn btn-d" data-act="avatar-del">🗑 Xóa ảnh — về mặc định</button>` : ''}
+        </div>
+      </div>
+      <div class="card"><h3>👤 Tên hiển thị + avatar nhanh (biểu tượng)</h3>
         <form data-form="u1-profile">
           <div class="form-row"><label>Tên hiển thị (để trống = dùng tên đăng nhập)</label><input name="displayName" value="${esc(u.displayName||'')}" maxlength="40"></div>
-          <div class="form-row"><label>Chọn avatar</label>
+          <div class="form-row"><label>Chọn avatar nhanh (chỉ khi chưa có ảnh tải lên)</label>
             <div class="pill-row">${AVATARS.map(a=>`<label style="cursor:pointer"><input type="radio" name="avatar" value="${a}" style="display:none" ${u.avatar===a?'checked':''}><span style="font-size:1.4rem;border:1px solid var(--line);border-radius:8px;padding:3px 7px;display:inline-block" data-avchip="${a}">${a}</span></label>`).join('')}</div>
           </div>
           <button class="btn btn-p">💾 Lưu hồ sơ</button>
@@ -2948,7 +2969,9 @@ ROUTES['#/u/profile'] = { title:'Hồ sơ cá nhân', user:true, html(){
       <div class="card"><h3>🔑 Đổi mật khẩu</h3>
         <form data-form="u1-pass">
           <div class="form-row"><label>Mật khẩu hiện tại</label><input name="old" type="password" required></div>
-          <div class="form-row"><label>Mật khẩu mới (tối thiểu 6 ký tự)</label><input name="nw" type="password" required minlength="6"></div>
+          <div class="form-row"><label>Mật khẩu mới (tối thiểu 8 ký tự — server kiểm tra, sai quá 5 lần bị chặn 15 phút)</label><input name="nw" type="password" required minlength="8"></div>
+          <div class="form-row"><label>Nhập lại mật khẩu mới</label><input name="cf" type="password" required minlength="8"></div>
+          <div class="muted" style="font-size:.78rem;margin-bottom:8px">Sau khi đổi, mọi phiên đăng nhập KHÁC trên thiết bị khác sẽ bị đăng xuất.</div>
           <button class="btn btn-p">Đổi mật khẩu</button>
         </form>
       </div>
@@ -2972,7 +2995,39 @@ ROUTES['#/u/profile'] = { title:'Hồ sơ cá nhân', user:true, html(){
 }};
 FORMS['u1-profile'] = (d) => mutate('auth', {act:'profile', displayName: d.displayName, avatar: d.avatar || ''});
 FORMS['u1-email'] = (d) => mutate('auth', {act:'email', email: d.email});
-FORMS['u1-pass'] = (d) => mutate('auth', {act:'password', old: d.old, nw: d.nw});
+FORMS['u1-pass'] = (d) => {
+  if(d.nw !== d.cf){ toast('Mật khẩu nhập lại không khớp.', true); return; }
+  if((d.nw||'').length < 8){ toast('Mật khẩu mới cần tối thiểu 8 ký tự.', true); return; }
+  mutate('auth', {act:'password', old: d.old, nw: d.nw});
+};
+/* MỤC 8: tải ảnh đại diện — trình duyệt cắt vuông giữa 256×256 rồi gửi; SERVER kiểm tra lại loại file + kích thước */
+ACTIONS['avatar-upload'] = async (d, el) => {
+  const card = el.closest('.card');
+  const input = card.querySelector('[data-avatarfile]');
+  const f = input && input.files && input.files[0];
+  if(!f){ toast('Chọn ảnh (PNG/JPG/WebP) trước.', true); return; }
+  if(f.size > 2 * 1024 * 1024){ toast('Ảnh vượt 2MB — chọn ảnh nhỏ hơn.', true); return; }
+  if(/\.svg$/i.test(f.name) || f.type === 'image/svg+xml'){ toast('KHÔNG nhận SVG — dùng PNG/JPG/WebP.', true); return; }
+  try{
+    toast('⏳ Đang cắt ảnh 256×256…');
+    const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+    const img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('Ảnh lỗi — không đọc được.')); im.src = dataUrl; });
+    const side = Math.min(img.naturalWidth, img.naturalHeight);
+    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 256;
+    cv.getContext('2d').drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, 256, 256);
+    const b64 = cv.toDataURL('image/jpeg', 0.9).split(',')[1];
+    toast('⬆ Đang tải ảnh lên server…');
+    const r = await API('auth', {act:'avatar-upload', fileB64: b64});
+    toast(r.msg || (r.ok ? 'Đã cập nhật ảnh đại diện' : 'Lỗi'), !r.ok);
+    if(r.ok){ await fetchState(true); render(); }
+  }catch(e){ toast('Lỗi xử lý ảnh: ' + e.message, true); }
+};
+ACTIONS['avatar-del'] = async () => {
+  if(!confirm('Xóa ảnh đại diện — về mặc định?')) return;
+  const r = await API('auth', {act:'avatar-del'});
+  toast(r.msg || (r.ok ? 'Đã xóa ảnh' : 'Lỗi'), !r.ok);
+  if(r.ok){ await fetchState(true); render(); }
+};
 
 /* ---- U2 Đơn hàng (lịch sử mua Plugin + trạng thái thanh toán) ---- */
 function orderBadge(o){
@@ -3013,6 +3068,9 @@ ROUTES['#/u/downloads'] = { title:'Tải file', user:true, html(){
   const vip = myLevel() === 'vip' && !!vipLic;
   const lockCount = allLics.filter(l => !licValid(l)).length;
   const verOf = id => { const p = (S.plugins||[]).find(x=>x.id===id); return p ? 'v' + p.version : ''; };
+  /* MỤC 7 (24/11/2026): bản jar MỚI NHẤT theo gói — hiện số phiên bản + SHA-256 (server tính khi admin upload) để khách đối chiếu file tải về */
+  const JR = (S.public && S.public.jarReleases) || {};
+  const jrHTML = rel => rel ? `<div class="muted" style="margin-top:8px;font-size:.78rem">📦 Bản mới nhất: <b>v${esc(rel.version)}</b> · ${(rel.size/1024).toFixed(0)}KB · upload ${esc(rel.at)}${rel.changelog?' · ' + esc(rel.changelog):''}<br>SHA-256 (tính ở SERVER — đối chiếu file tải về): <span class="code" style="word-break:break-all">${esc(rel.sha256)}</span> <button class="btn btn-sm" data-act="copy-key" data-key="${esc(rel.sha256)}">📋 Sao chép</button></div>` : `<div class="muted" style="margin-top:8px;font-size:.78rem">⏳ Chưa có bản jar nào được admin upload cho gói này — tải sẽ dùng file đang có trên hệ thống.</div>`;
   /* key đầy đủ chỉ hiển thị ĐÚNG 1 LẦN sau khi mua — xóa storage SAU khi đã vẽ (tránh race double-render) */
   let reveal = null;
   try{ reveal = JSON.parse(sessionStorage.getItem('DL_REVEAL_KEY') || 'null'); }catch(e){}
@@ -3028,8 +3086,9 @@ ROUTES['#/u/downloads'] = { title:'Tải file', user:true, html(){
   <div class="card"><h3>⬇ Mục tải của VIP (1 mục duy nhất)</h3>
     <div class="nitem" style="border-left-color:var(--gold)">
       <div class="ntitle">🔌 Plugin bản VIP — file mới nhất <span class="badge b-ok">${esc(verOf('PL-MAIN'))}</span></div>
-      <div class="nbody">Bấm tải → nhập license VIP đầy đủ (DL-...). Server kiểm tra key + hạn TỪNG LẦN tải; key sai / hết hạn / bị thu hồi bị từ chối.</div>
+      <div class="nbody">Bấm tải → nhập license VIP đầy đủ (DL-...). Server kiểm tra key + hạn TỪNG LẦN tải; key sai / hết hạn / bị thu hồi bị từ chối. Link không công khai — chỉ tài khoản VIP còn hạn tải được.</div>
       <div class="nmeta"><button class="btn btn-p btn-sm" data-act="dl-lic" data-f="vip">⬇ Tải Plugin bản VIP (mới nhất)</button></div>
+      ${jrHTML(JR.vip)}
     </div>
     <p class="muted" style="margin-top:8px">🔒 VIP chỉ có 1 mục tải: Plugin bản VIP (file mới nhất, kèm resource pack). Nút tải luôn dẫn tới bản mới nhất server đang giữ.</p>
   </div>`
@@ -3038,8 +3097,9 @@ ROUTES['#/u/downloads'] = { title:'Tải file', user:true, html(){
   <div class="card"><h3>⬇ Mục tải của FREE (1 mục duy nhất)</h3>
     <div class="nitem" style="border-left-color:var(--teal)">
       <div class="ntitle">🔌 Plugin bản FREE — file mới nhất <span class="badge b-ok">${esc(verOf('PL-FREE'))}</span></div>
-      <div class="nbody">Bấm tải → nhập KEY FREE đầy đủ (DF-...). Server kiểm tra key TỪNG LẦN tải; key sai bị từ chối.</div>
+      <div class="nbody">Bấm tải → nhập KEY FREE đầy đủ (DF-...). Server kiểm tra key TỪNG LẦN tải; key sai bị từ chối. Nhận cả key định dạng cũ.</div>
       <div class="nmeta"><button class="btn btn-p btn-sm" data-act="dl-lic" data-f="free" ${freeLic ? '' : 'disabled'}>⬇ Tải Plugin bản FREE (mới nhất)</button> <a class="btn btn-sm" href="#/shop">⬆ Nâng cấp VIP — mở Plugin bản VIP</a></div>
+      ${jrHTML(JR.free)}
     </div>
     <p class="muted" style="margin-top:8px">🎁 Mỗi tài khoản đăng ký được tặng 1 KEY FREE (DF) dùng vĩnh viễn. Giao diện tải giống hệt VIP: thẻ key ẩn/hiện + nút tải + kiểm tra hạn ở server.</p>
   </div>`}
@@ -3059,7 +3119,7 @@ ROUTES['#/u/downloads'] = { title:'Tải file', user:true, html(){
 `;}};
 /* tải file theo license: yêu cầu NHẬP key đầy đủ — key không nằm trong link/DOM */
 ACTIONS['dl-lic'] = (d) => {
-  const hint = d.f === 'vip' ? 'Nhập KEY VIP đầy đủ (VIP dạng DL-VIP-9F2K-8817)' : 'Nhập KEY bản FREE đầy đủ (FREE dạng DF-A1B2-4837)';
+  const hint = d.f === 'vip' ? 'Nhập KEY VIP đầy đủ (VIP dạng DL-VIP-9F2K-8817)' : 'Nhập KEY bản FREE đầy đủ (DF-A1B2-C3D9 — key định dạng cũ DF-…/FREE-… vẫn dùng được)';
   const k = (prompt(hint + ' — máy chủ kiểm tra quyền + hạn từng lần tải.') || '').trim().toUpperCase();
   if(!k) return;
   location.href = '/api/download?lic=' + encodeURIComponent(k) + '&f=' + d.f;
@@ -3240,10 +3300,10 @@ ROUTES['#/u/license-check'] = { title:'Tra cứu key', html(){
   const mine = (S.myLicenses||[]);
   return `
   <h1 class="pagetitle">🔍 Tra cứu license key<span class="tagchip">máy chủ tra cứu, không cần đăng nhập</span></h1>
-  <div class="subtitle">Key không được hiển thị đầy đủ trên các trang (chống lộ/chia sẻ). Nhập key đầy đủ của bạn vào ô dưới để xem trạng thái: còn hạn / hết hạn / vĩnh viễn, mốc thời hạn và số server đang dùng.</div>
+  <div class="subtitle">Key không được hiển thị đầy đủ trên các trang (chống lộ/chia sẻ). Nhập key đầy đủ của bạn vào ô dưới để xem trạng thái: còn hạn / hết hạn / bị khóa (thu hồi) / vĩnh viễn, mốc thời hạn và số server đang dùng. Máy chủ nhận CẢ các tiền tố: <b>DL-</b> (VIP), <b>DF-</b> (FREE mới DF-XXXX-XXXX lẫn định dạng cũ), <b>FREE-</b> (key cũ nhất của web chính).</div>
   <div class="card"><h3>Nhập key cần tra cứu</h3>
     <form data-form="u8-check" class="form-inline">
-      <div class="form-row" style="flex:2"><input name="key" placeholder="VIP: DL-VIP-9F2K-8817 · Bản FREE: DF-A1B2-4837" required style="letter-spacing:1px"></div>
+      <div class="form-row" style="flex:2"><input name="key" placeholder="VIP: DL-VIP-9F2K-8817 · FREE mới: DF-A1B2-C3D9 · FREE cũ: DF-FREE-0001" required style="letter-spacing:1px"></div>
       <button class="btn btn-p">🔍 Tra cứu</button>
     </form>
     <div id="licresult"></div>
@@ -3372,8 +3432,42 @@ ROUTES['#/shop'] = { title:'Cửa hàng Plugin', html(){
   const tiers = getTiers();
   const hasLic = current() && (S.myLicenses||[]).some(licValid);
   return `
-  <h1 class="pagetitle">🛒 Cửa hàng Plugin<span class="tagchip">1 loại license — 4 mốc thời hạn</span></h1>
-  <div class="subtitle">Plugin bản quyền bán theo THỜI HẠN (30/180/365 ngày hoặc Vĩnh viễn) — thanh toán QR ngân hàng (mã QR riêng theo đơn) · thẻ cào · ví tiền. Duyệt xong tự sinh license key với đúng thời hạn đã chọn.</div>
+  <h1 class="pagetitle">🛒 Cửa hàng Plugin<span class="tagchip">2 gói: THƯỜNG (0đ) &amp; VIP theo thời hạn</span></h1>
+  <div class="subtitle">Chọn 1 trong 2 gói bên dưới — gói THƯỜNG nhận key DF ngay, gói VIP thanh toán QR/thẻ cào/ví rồi hệ thống TỰ ĐỘNG cấp license key DL-VIP (không cần admin duyệt).</div>
+  <div class="grid2" style="margin-bottom:16px">
+    <div class="pkg" style="border-color:var(--teal)">
+      <h3 style="color:var(--tx);margin-top:0">🆓 Gói THƯỜNG (Free) — 0đ</h3>
+      <div class="price"><span class="badge b-ok">Miễn phí vĩnh viễn</span></div>
+      <ul>
+        <li>Plugin bản FREE — võ hồn + Hồn Kỹ cơ bản</li>
+        <li>Resource Pack FREE 4 võ hồn 2D</li>
+        <li>Key bản FREE <b>DF-XXXX-XXXX</b> dùng vĩnh viễn — cấp NGAY khi bấm nút</li>
+        <li>Tải bản FREE mới nhất trong "Tải file"</li>
+        <li>1 server · nâng cấp VIP bất cứ lúc nào</li>
+      </ul>
+      ${current()
+        ? `<button class="btn btn-t" style="width:100%;margin-top:10px" data-act="claim-free">🎁 NHẬN MIỄN PHÍ — cấp key DF ngay</button>`
+        : `<a class="btn btn-t" style="width:100%;margin-top:10px;text-align:center;display:block" href="#/login?next=%23%2Fshop">🔑 Đăng nhập để nhận miễn phí</a>`}
+      <p class="muted" style="margin-top:8px;font-size:.78rem">Cần đăng nhập · không cần admin duyệt · mỗi tài khoản nhận 1 key duy nhất.</p>
+    </div>
+    <div class="pkg best">
+      <h3 style="color:var(--tx);margin-top:0">💎 Gói VIP (Premium) — bản quyền theo thời hạn</h3>
+      <div class="price">từ <b style="color:#f0b642">${fmtVND(Math.round(Math.min(...tiers.map(t=>t.price*(100-(t.sale||0)))/100)))}</b> <span class="badge b-err">đầy đủ nhất</span></div>
+      <ul>
+        <li><b>Mọi tính năng bản FREE</b> plus:</li>
+        <li>Toàn bộ võ hồn VIP + hiệu ứng 3D + HUD máu võ hồn</li>
+        <li>Resource Pack FULL 2D/3D + add-on Lam Điện Bá Vương Long</li>
+        <li>Key license <b>DL-VIP</b> TỰ ĐỘNG cấp sau khi server xác nhận thanh toán</li>
+        <li>LICENSE & KEY gắn 1–2 server — chống chia sẻ key qua IP</li>
+        <li>Cập nhật mới miễn phí trong thời hạn license</li>
+        <li>Hỗ trợ ưu tiên qua ticket</li>
+      </ul>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px">
+        ${tiers.map(t=>`<button class="btn btn-p btn-sm" data-act="buy-tier" data-tier="${esc(t.id)}">⚡ Mua ngay — ${tierLabel(t)}<br><b>${tierPriceHTML(t)}</b></button>`).join('')}
+      </div>
+      <p class="muted" style="margin-top:8px;font-size:.78rem">Thanh toán: ví đã nạp · QR ngân hàng · thẻ cào — giá tính ở SERVER, không thể sửa từ trình duyệt.</p>
+    </div>
+  </div>
   ${main ? `
   <div class="pkg best" style="margin-bottom:16px">
     <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start">
@@ -3439,6 +3533,17 @@ ACTIONS['buy-tier'] = (d) => {
   cartSet([{pluginId: 'PL-MAIN', tierId: t.id, qty: 1}]);
   toast('🎫 Đã chọn mốc ' + tierLabel(t) + ' — chọn phương thức thanh toán.');
   location.hash = '#/checkout'; render();
+};
+/* LỆNH ƯU TIÊN 1 — nút "NHẬN MIỄN PHÍ" gói THƯỜNG: server cấp NGAY key DF + đơn 0đ lưu lịch sử */
+ACTIONS['claim-free'] = async () => {
+  const r = await API('orders', {act:'claim-free'});
+  if(!r.ok){ toast(r.msg, true); return; }
+  if(r.freeKey){
+    sessionStorage.setItem('DL_REVEAL_KEY', JSON.stringify({key: r.freeKey, label: 'KEY BẢN FREE — vĩnh viễn'}));
+    toast(r.repeat ? 'Bạn đã có key bản FREE từ trước (vẫn dùng tốt): ' + r.masked : '🎁 Đã cấp KEY BẢN FREE (DF) — key đầy đủ hiện 1 lần ở trang Tải file!');
+  }
+  await fetchState(true);
+  if(location.hash === '#/u/downloads'){ render(); } else { location.hash = '#/u/downloads'; }
 };
 
 /* ---------- chi tiết Plugin ---------- */
@@ -4505,6 +4610,92 @@ FORMS['a21-assign'] = d => mutate('admin', {act:'assign-key', key: d.key, who: d
 let A14_EDIT = null, A15_VIEW = null;
 
 /* ---- A14 Quản lý Plugin ---- */
+/* ---- MỤC 7 (24/11/2026): TẢI LÊN BẢN CẬP NHẬT JAR cho 2 gói FREE & VIP — theo phiên bản, có lịch sử + đặt lại bản mới nhất ---- */
+const JAR_PKG_LABEL = {free: '🆓 Gói FREE', vip: '💎 Gói VIP'};
+ROUTES['#/a/jar'] = { title:'Tải lên bản cập nhật', admin:true, html(){
+  const rels = (S.admin && S.admin.jarReleases) || [];
+  const log = (S.admin && S.admin.jarLog) || [];
+  const cur = S.public.jarReleases || {};
+  return `
+  <h1 class="pagetitle">📤 Tải lên bản cập nhật<span class="tagchip">2 gói FREE &amp; VIP — bắt buộc nhập số phiên bản</span></h1>
+  <div class="subtitle">Chọn gói → chọn file .jar → nhập số phiên bản (VD: 3.16.9) → ghi chú thay đổi (tuỳ chọn). File mới trở thành “mới nhất” của gói đó; file cũ GIỮ NGUYÊN trong lịch sử — lỡ upload nhầm thì bấm “Đặt làm mới nhất” bản cũ để hoàn tác. SHA-256 được tính TẠI SERVER.</div>
+  <div class="grid2">
+    ${['free','vip'].map(pkg => `
+    <div class="card" data-jarup="${pkg}">
+      <h3>${JAR_PKG_LABEL[pkg]} — file mới nhất hiện tại</h3>
+      <div class="muted" style="margin-bottom:10px">${cur[pkg] ? 'v' + esc(cur[pkg].version) + ' · ' + esc(cur[pkg].fileName) + ' (' + (cur[pkg].size/1024).toFixed(0) + 'KB) · upload ' + esc(cur[pkg].at) : 'chưa có jar nào cho gói này'}</div>
+      <div class="form-row"><label>File .jar (tối đa 80MB — file lớn tự upload theo phần, KHÔNG vượt giới hạn 4,5MB/request của hàm)</label><input type="file" data-jarfile accept=".jar" required></div>
+      <div class="form-row"><label>Số phiên bản — BẮT BUỘC</label><input name="jarver" placeholder="VD: 3.16.9" required></div>
+      <div class="form-row"><label>Ghi chú thay đổi (tuỳ chọn)</label><input name="jarnote" placeholder="VD: sửa Lam Điện vô hình"></div>
+      <button class="btn btn-p" style="width:100%" data-act="jar-upload" data-pkg="${pkg}">⬆ Tải lên — trở thành bản mới nhất của ${pkg === 'free' ? 'FREE' : 'VIP'}</button>
+    </div>`).join('')}
+  </div>
+  <div class="card"><h3>📜 Lịch sử phiên bản (${rels.length}) — KHÔNG bao giờ ghi đè mất file cũ</h3>
+    <div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>Gói</th><th>Phiên bản</th><th>File</th><th>Dung lượng</th><th>SHA-256 (server)</th><th>Người upload</th><th>Thời điểm</th><th>Trạng thái</th><th></th></tr></thead>
+      <tbody>${rels.map(r=>`<tr>
+        <td>${r.pkg === 'free' ? '🆓 FREE' : '💎 VIP'}</td>
+        <td><b>v${esc(r.version)}</b>${r.changelog?`<div class="muted" style="font-size:.72rem">${esc(r.changelog)}</div>`:''}</td>
+        <td><span class="code" style="font-size:.72rem">${esc(r.fileName)}</span></td>
+        <td>${(r.size/1024).toFixed(1)}KB</td>
+        <td><span class="code" style="font-size:.66rem;word-break:break-all">${esc(r.sha256.slice(0,16))}…</span></td>
+        <td>${esc(r.uploader||'')}</td>
+        <td>${esc(r.at)}</td>
+        <td>${r.latest?'<span class="badge b-ok">MỚI NHẤT</span>':'<span class="badge b-mut">lịch sử</span>'}</td>
+        <td>${r.latest?'':`<button class="btn btn-sm btn-t" data-act="jar-latest" data-id="${esc(r.id)}">📌 Đặt làm mới nhất</button>`}</td>
+      </tr>`).join('') || '<tr><td colspan="9" class="muted">Chưa upload bản nào.</td></tr>'}</tbody>
+    </table></div>
+  </div>
+  <div class="card"><h3>🛡 Nhật ký upload / đặt lại bản (ai · lúc nào · bản nào · số phiên bản)</h3>
+    <div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>Thời điểm</th><th>Ai</th><th>Hành động</th><th>Gói</th><th>Phiên bản</th><th>File</th><th>SHA-256</th></tr></thead>
+      <tbody>${log.slice(0,40).map(l=>`<tr>
+        <td>${esc(l.at)}</td><td><b>${esc(l.by)}</b></td>
+        <td>${l.act === 'upload' ? '⬆ Upload' : '📌 Đặt lại mới nhất'}</td>
+        <td>${l.pkg === 'free' ? 'FREE' : 'VIP'}</td>
+        <td>v${esc(l.version)}</td>
+        <td><span class="code" style="font-size:.72rem">${esc(l.fileName||'')}</span></td>
+        <td><span class="code" style="font-size:.66rem">${esc((l.sha256||'').slice(0,16))}…</span></td>
+      </tr>`).join('') || '<tr><td colspan="7" class="muted">Chưa có nhật ký.</td></tr>'}</tbody>
+    </table></div>
+  </div>`;
+}};
+/* upload jar: file ≤3,2MB gửi 1 request; file lớn cắt phần 3MB gửi jar-part rồi jar-done — server ghép + kiểm tra + SHA-256 */
+async function uploadJarFile(pkg, box){
+  try{
+    const f = (box.querySelector('[data-jarfile]')||{}).files ? box.querySelector('[data-jarfile]').files[0] : null;
+    const ver = (box.querySelector('[name=jarver]')||{}).value || '';
+    const note = (box.querySelector('[name=jarnote]')||{}).value || '';
+    if(!f){ toast('Chọn file .jar trước.', true); return; }
+    if(!/\.jar$/i.test(f.name)){ toast('Chỉ nhận file .jar.', true); return; }
+    if(!ver.trim()){ toast('BẮT BUỘC nhập số phiên bản (VD: 3.16.9).', true); return; }
+    if(f.size > 80 * 1024 * 1024){ toast('File vượt 80MB.', true); return; }
+    const b64 = await new Promise(res => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.readAsDataURL(f); });
+    if(f.size <= 3.2 * 1024 * 1024){
+      toast('⬆ Đang tải lên ' + f.name + ' — v' + ver + '…');
+      const r = await API('admin', {act:'jar-upload', pkg, version: ver.trim(), changelog: note, fileName: f.name, fileB64: b64});
+      toast(r.msg || (r.ok ? 'Đã tải lên' : 'Lỗi'), !r.ok);
+      if(r.ok){ await fetchState(true); render(); }
+      return;
+    }
+    const uid = Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b=>b.toString(16).padStart(2,'0')).join('');
+    const CHUNK = 3 * 1024 * 1024;
+    const parts = Math.ceil(f.size / CHUNK);
+    let done = false;
+    for(let i = 0; i < parts; i++){
+      toast('⬆ Đang gửi phần ' + (i+1) + '/' + parts + ' — ' + f.name + ' (v' + ver + ')…');
+      const pr = await API('admin', {act:'jar-part', uid, idx: i, data: b64.slice(i * CHUNK * 4 / 3, (i + 1) * CHUNK * 4 / 3)});
+      if(!pr.ok) throw new Error(pr.msg || 'Phần ' + i + ' lỗi');
+    }
+    const r = await API('admin', {act:'jar-done', uid, parts, pkg, version: ver.trim(), changelog: note, fileName: f.name});
+    toast(r.msg || (r.ok ? 'Đã tải lên' : 'Lỗi'), !r.ok);
+    done = r.ok;
+    if(done){ await fetchState(true); render(); }
+  }catch(e){ toast('Upload lỗi: ' + e.message, true); }
+}
+ACTIONS['jar-upload'] = (d, el) => uploadJarFile(d.pkg, el.closest('[data-jarup]'));
+ACTIONS['jar-latest'] = (d) => mutate('admin', {act:'jar-latest', id: d.id}, 'Đã đặt lại bản mới nhất.');
+
 ROUTES['#/a/plugins'] = { title:'Quản lý Plugin', admin:true, html(){
   const e = A14_EDIT ? (S.plugins||[]).find(p=>p.id===A14_EDIT) : null;
   return `
