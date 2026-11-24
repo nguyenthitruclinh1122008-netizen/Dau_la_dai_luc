@@ -61,7 +61,7 @@ function fetchT(url, opts, ms){
   const timer = setTimeout(() => ac.abort(), ms || 5000);
   return fetch(url, Object.assign({}, opts, {signal: ac.signal})).finally(() => clearTimeout(timer));
 }
-const BLOB_TIMEOUT = 5000;
+const BLOB_TIMEOUT = 3500;
 
 async function blobFetch(path, opts){
   const r = await fetchT(BLOB_API + path, Object.assign({}, opts, {
@@ -131,7 +131,7 @@ async function pgPutFileRaw(path, buf, contentType){
   await pg.query('INSERT INTO v2beta.files (path, data, ctype, size, updated) VALUES ($1, $2, $3, $4, now()) ' +
     'ON CONFLICT (path) DO UPDATE SET data = EXCLUDED.data, ctype = EXCLUDED.ctype, size = EXCLUDED.size, updated = now()',
     [path, buf, contentType || 'application/octet-stream', String(buf.length)]);
-  return '/api/file?p=' + encodeURIComponent(path);
+  return '/api/download?p=' + encodeURIComponent(path);
 }
 async function pgGetRawByPath(path, ms){
   await pgEnsure();
@@ -199,7 +199,7 @@ function stateKey(pathname){
 }
 async function listRevs(){
   let lastErr = null;
-  for(let i = 0; i < 3; i++){
+  for(let i = 0; i < 2; i++){
     try{
       const r = await fetchT(BLOB_API + '?limit=100&prefix=' + encodeURIComponent(STATE_DIR + '/state'), {
         headers: {authorization: 'Bearer ' + BLOB_TOKEN}
@@ -244,7 +244,7 @@ async function blobReadLatestState(){
     try{
       leg = await blobLegacyReadLatest();
       if(leg && validState(leg.st)){
-        await blobPutFixed(leg.st);       /* chép sang pathname cố định — từ đây không LIST nữa */
+        try{ await blobPutFixed(leg.st); }catch(e){ /* migrate sang fixed-path lỗi (vd store khóa GHI) — vẫn dùng state thật */ }
         return leg;
       }
     }catch(e){ err2 = e; /* store suspend / chưa có state cũ */ }
@@ -270,7 +270,14 @@ async function withState(mutator, tries){
     const result = await mutator(st);
     const next = (result && result.next) ? result.next : st;
     next.rev = rev + 1;
-    await blobPutFixed(next);
+    try{
+      await blobPutFixed(next);
+    }catch(e){
+      /* 25/11/2026: store khóa GHI (quota Vercel) hoặc stall — ném lỗi TIẾNG VIỆT RÕ, KHÔNG retry
+         (retry chỉ dành cho xung đột rev sau khi PUT thành công — thấy ở bước xác nhận bên dưới) */
+      if(/403|suspended/i.test(e.message)) throw new Error('Kho dữ liệu đang bị KHÓA GHI theo quota Vercel (Blob store tự mở lại 24/12/2026). Vui lòng thử lại sau hoặc liên hệ admin.');
+      throw new Error('Kho dữ liệu tạm thời không ghi được (' + String(e.message).slice(0, 60) + ') — thử lại sau vài giây.');
+    }
     /* xác nhận: đọc lại — rev của mình còn top thì xong; người khác ghi đè giữa chừng thì làm lại */
     try{
       const back = await blobGetFixed(1);
@@ -320,7 +327,9 @@ async function blobList(prefix){
 async function blobGetRaw(pathOrUrl, ms){
   const s = String(pathOrUrl || '');
   if(DRIVER === 'postgres'){
-    if(s.startsWith('/api/file?p=')){ return pgGetRawByPath(decodeURIComponent(qLookup(s, 'p')), ms); }
+    const m = /[?&]p=([^&]+)/.exec(s);
+    if(s.indexOf('/api/download?p=') === 0 && m){ return pgGetRawByPath(decodeURIComponent(m[1]), ms); }
+    if(s.indexOf('/api/file?p=') === 0 && m){ return pgGetRawByPath(decodeURIComponent(m[1]), ms); }   /* tên URL cũ */
     if(s.startsWith('http')){
       /* file cũ còn trỏ URL Blob công khai (state legacy) — đọc xuyên qua */
       const r = await fetchT(s, undefined, ms || 30000);
@@ -343,7 +352,7 @@ async function putFile(productId, fileName, buf, contentType){
   const path = 'files/' + productId + '/' + crypto.randomBytes(6).toString('hex') + '_' + safe;
   const meta = await blobPut(path, buf, contentType || 'application/octet-stream');
   const url = DRIVER === 'postgres'
-    ? '/api/file?p=' + encodeURIComponent(path)
+    ? '/api/download?p=' + encodeURIComponent(path)
     : (meta.downloadUrl || meta.url);
   return {fileKey: path, fileUrl: url, fileName: safe, fileSize: buf.length};
 }
@@ -521,7 +530,7 @@ module.exports = {
   isVipKey, isFreeKey, licActive, userLevel,
   sha256Hex, isZipBytes, sniffImage
 };
-function fileUrlOf(path){ return '/api/file?p=' + encodeURIComponent(path); }
+function fileUrlOf(path){ return '/api/download?p=' + encodeURIComponent(path); }
 
 /* seedState được inject bởi seed.js (require vòng tránh lặp) */
 let _seedState = null;

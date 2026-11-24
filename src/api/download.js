@@ -7,6 +7,28 @@ const O = require('./_lib/ops.js');
 module.exports = async (req, res) => {
   try{
     const q = C.qOf(req);
+    /* ---- 25/11/2026: phục vụ file CÔNG KHAI (ảnh đại diện) từ kho Postgres v2beta ----
+       WHITELIST CHỈ prefix files/avatar- — jar/plugin/tmp bị từ chối (chỉ tải qua luồng
+       license bên dưới). Tách khỏi /api/file riêng vì Hobby chỉ cho 12 functions. */
+    if(q.p){
+      if(req.method !== 'GET' && req.method !== 'HEAD') return C.fail(res, 405, 'Chỉ hỗ trợ GET.');
+      if(C.DRIVER !== 'postgres') return C.fail(res, 404, 'Không có kho file nội bộ.');
+      let p = C.cleanStr(q.p, 300);
+      try{ p = decodeURIComponent(p); }catch(e){}
+      if(p.indexOf('files/avatar-') !== 0 || p.includes('..')) return C.fail(res, 403, 'Loại file này không mở công khai.');
+      let buf;
+      try{ buf = await C.blobGetRaw(p, 15000); }
+      catch(e){ return C.fail(res, 404, 'Không tìm thấy file.'); }
+      if(!buf || !buf.length) return C.fail(res, 404, 'File rỗng.');
+      const kind = /\.png$/i.test(p) ? 'image/png' : (/\.jpe?g$/i.test(p) ? 'image/jpeg' : (/\.webp$/i.test(p) ? 'image/webp' : 'application/octet-stream'));
+      res.writeHead(200, {
+        'Content-Type': kind,
+        'Content-Length': buf.length,
+        'Cache-Control': 'public, max-age=86400, immutable',
+        'X-Content-Type-Options': 'nosniff'
+      });
+      return res.end(req.method === 'HEAD' ? undefined : buf);
+    }
     const st = await C.getState();
     const me = A.getAuth(req, st);
     if(!me) return C.json(res, 401, {ok:false, auth:true, msg:'Bạn cần đăng nhập để tải file.'});
