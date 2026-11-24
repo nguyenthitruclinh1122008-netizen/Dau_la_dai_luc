@@ -2470,12 +2470,27 @@ const S = { loaded:false, fetchedAt:0, me:null, plugins:[], reviews:[], myOrders
 
 async function fetchState(force){
   if(!force && S.loaded && Date.now() - S.fetchedAt < 10000) return;
-  const r = await fetch('/api/state', {credentials:'include'});
-  const d = await r.json();
-  if(!d.ok) throw new Error(d.msg || 'Không tải được dữ liệu server');
-  Object.assign(S, d);
-  S.loaded = true; S.fetchedAt = Date.now();
-  buildNav();
+  /* FIX 24/11/2026 — chống trang trắng: fetch có timeout + tự thử lại 3 lần
+     (nguyên nhân gốc: /api/state đôi khi treo do Blob stall — đã fix server-side bằng timeout,
+     client vẫn phải tự thủ lại + báo lỗi rõ ràng thay vì treo trắng trang) */
+  let lastErr = null;
+  for(let i = 0; i < 3; i++){
+    const ctl = ('AbortController' in window) ? new AbortController() : null;
+    const timer = ctl ? setTimeout(() => ctl.abort(), 20000) : null;
+    try{
+      const r = await fetch('/api/state', {credentials:'include', signal: ctl ? ctl.signal : undefined});
+      const d = await r.json();
+      if(!d.ok) throw new Error(d.msg || 'Không tải được dữ liệu server');
+      Object.assign(S, d);
+      S.loaded = true; S.fetchedAt = Date.now();
+      buildNav();
+      return;
+    }catch(e){
+      lastErr = e;
+      if(i < 2) await new Promise(res => setTimeout(res, 1200 * (i + 1)));
+    }finally{ if(timer) clearTimeout(timer); }
+  }
+  throw new Error((lastErr && lastErr.message) || 'Không kết nối được server dữ liệu');
 }
 function current(){ return S.me; }
 function isAdmin(){ return S.me && S.me.role === 'admin'; }
@@ -2542,7 +2557,14 @@ function cartCount(){ return cartGet().reduce((s,x)=>s+(x.qty||1),0); }
 function cartPlugin(id){ return (S.plugins||[]).find(p => p.id === id); }
 
 /* ---------- license helpers ---------- */
-function licValid(l){ return !l.expires || daysUntil(l.expires) >= 0; }
+function licValid(l){ return !l.revoked && (!l.expires || daysUntil(l.expires) >= 0); }
+/* 24/11/2026 — cấp độ FREE/VIP: SERVER trả me.level; fallback tính client từ myLicenses */
+function myLevel(){
+  if(S.me && S.me.level) return S.me.level;
+  return (S.myLicenses||[]).some(l => String(l.key||'').startsWith('DL-') && licValid(l)) ? 'vip' : 'free';
+}
+function myFreeKey(){ return (S.myLicenses||[]).find(l => String(l.key||'').startsWith('DF-') && !l.revoked) || null; }
+function myVipKey(){ return (S.myLicenses||[]).filter(l => String(l.key||'').startsWith('DL-') && licValid(l)).sort((a,b)=>(b.days||0)-(a.days||0))[0] || null; }
 /* HIỂN THỊ KEY DẠNG ẨN MỘT PHẦN — không in key đầy đủ ra màn hình (chống lộ/chia sẻ key) */
 function maskKey(key){
   const segs = String(key || '').split('-');
@@ -2593,7 +2615,7 @@ function buildNav(){
     ]));
     if(adminOK()){
       d.push(gsec('👥 Người dùng', [['#/a/users', '👤 Người dùng'], ['#/a/credit', '💰 Cấp tiền'], ['#/a/referrals', '🤝 Giới thiệu']]));
-      d.push(gsec('🔑 License & Key', [['#/a/pricing', '🪜 Mốc gói & giá'], ['#/a/grant-vip', '⬆ Nâng cấp VIP'], ['#/a/mint-key', '🔑 Tạo key'], ['#/a/plugins', '📦 Sản phẩm']]));
+      d.push(gsec('🔑 License & Key', [['#/a/pricing', '🪜 Mốc gói & giá'], ['#/a/grant-vip', '⬆⬇ Nâng/hạ cấp VIP'], ['#/a/mint-key', '🔑 Tạo key'], ['#/a/plugins', '📦 Sản phẩm']]));
       d.push(gsec('💰 Tài chính', [['#/a/orders', '🧾 Đơn hàng'], ['#/a/deposits', '💳 Duyệt nạp tiền'], ['#/a/coupons', '🏷 Mã giảm giá'], ['#/a/topup-rates', '📉 Chiết khấu'], ['#/a/bank', '🏦 Ngân hàng'], ['#/a/stats', '📊 Thống kê']]));
       d.push(gsec('📣 Nội dung', [['#/a/broadcast', '📢 Gửi thông báo'], ['#/a/changelog', '📜 Quản lý cập nhật'], ['#/a/reviews', '⭐ Đánh giá'], ['#/a/tickets', '🎫 Phiếu hỗ trợ']]));
       d.push(gsec('⚙ Hệ thống', [['#/a/dashboard', '📈 Tổng quan'], ['#/a/serverstats', '🖥 Máy chủ'], ['#/a/backup', '💾 Sao lưu'], ['#/a/export', '📤 Xuất dữ liệu']]));
@@ -2845,7 +2867,7 @@ FORMS['admin-gate'] = async (d) => {
 ROUTES['#/register'] = { title:'Đăng ký', html(){
   const ref = new URLSearchParams((location.hash||'').split('?')[1]||'').get('ref') || '';
   return `
-  <h1 class="pagetitle">Đăng ký tài khoản<span class="tagchip">Lưu server — dùng mọi thiết bị</span></h1>
+  <h1 class="pagetitle">Đăng ký tài khoản<span class="tagchip">Tặng ngay KEY FREE (DF) — dùng vĩnh viễn</span></h1>
   <div class="subtitle">Tạo tài khoản miễn phí — mua Plugin, nạp ví, tích điểm, giới thiệu hoa hồng ngay sau khi đăng ký.</div>
   <div class="grid2">
     <div class="card"><h3>📝 Thông tin đăng ký</h3>
@@ -2860,6 +2882,7 @@ ROUTES['#/register'] = { title:'Đăng ký', html(){
     </div>
     <div class="card"><h3>Bạn sẽ nhận được gì?</h3>
       <div class="nlist">
+        <div class="nitem"><div class="ntitle">🎁 KEY BẢN FREE (DF) — tặng ngay khi đăng ký</div><div class="nbody">Không cần mua, không cần làm gì thêm: hệ thống tự cấp 1 key bản FREE dùng VĨNH VIỄN, tải được Plugin bản FREE trong mục "Tải file".</div></div>
         <div class="nitem"><div class="ntitle">📦 Kho Plugin đã mua</div><div class="nbody">Tải Plugin đã thanh toán bất cứ lúc nào.</div></div>
         <div class="nitem"><div class="ntitle">💰 Ví nạp tiền riêng</div><div class="nbody">Nạp QR ngân hàng hoặc thẻ cào 9 nhà mạng.</div></div>
         <div class="nitem"><div class="ntitle">🎁 Điểm thưởng + hoa hồng giới thiệu</div><div class="nbody">Tích 10% giá trị đơn, nhận 20% hoa hồng mỗi người mời mua.</div></div>
@@ -2873,9 +2896,11 @@ FORMS['register'] = async (d) => {
   if(d.password !== d.confirm){ toast('Mật khẩu nhập lại không khớp.', true); return; }
   const r = await API('auth', {act:'register', username: d.username, email: d.email, password: d.password, ref: d.ref});
   if(!r.ok){ toast(r.msg, true); return; }
-  toast('🎉 Tạo tài khoản thành công — xin chào ' + r.username + '! (đã tự đăng nhập)');
+  /* 24/11/2026: server tự cấp KEY FREE (DF) ngay khi đăng ký — hiện key ĐẦY ĐỦ 1 lần tại Tải file */
+  if(r.freeKey) sessionStorage.setItem('DL_REVEAL_KEY', JSON.stringify({key: r.freeKey, label: 'KEY BẢN FREE — vĩnh viễn'}));
+  toast(r.freeKey ? '🎉 Tạo tài khoản thành công! Đã tặng KEY BẢN FREE (DF) — xem ngay ở Tải file.' : '🎉 Tạo tài khoản thành công — xin chào ' + r.username + '!');
   await fetchState(true);
-  location.hash = '#/u/profile'; render();
+  location.hash = '#/u/downloads'; render();
 };
 
 
@@ -2896,6 +2921,7 @@ ROUTES['#/u/profile'] = { title:'Hồ sơ cá nhân', user:true, html(){
         <tr><td>Tên đăng nhập</td><td><b>${esc(u.username)}</b></td></tr>
         <tr><td>Email</td><td>${esc(u.email || '—')}</td></tr>
         <tr><td>Loại tài khoản</td><td>${u.role==='admin'?'Quản trị viên':'Thành viên'}</td></tr>
+        <tr><td>Cấp độ tải file</td><td>${myLevel()==='vip' ? '<span class="badge b-ok">💎 VIP</span> — 1 mục: Plugin bản VIP' : '<span class="badge b-info">🆓 FREE</span> — 1 mục: Plugin bản FREE (key DF)'}</td></tr>
         <tr><td>Ngày tham gia</td><td>${fmtDate(u.createdAt)}</td></tr>
         <tr><td>Điểm thưởng</td><td><b class="stat-ok">${(u.points||0).toLocaleString('vi-VN')}</b></td></tr>
         <tr><td>Số dư ví</td><td><b>${fmtVND(u.balance)}</b> <a class="btn btn-sm btn-p" style="margin-left:8px" href="#/u/wallet">+ Nạp tiền</a></td></tr>
@@ -2977,47 +3003,48 @@ ROUTES['#/u/orders'] = { title:'Đơn hàng của tôi', user:true, html(){
 }};
 ACTIONS['order-cancel'] = (d) => mutate('orders', {act:'cancel', id: d.id}, 'Đã hủy đơn.');
 
-/* ---- U3 Kho Plugin đã mua: file tải theo LICENSE (còn hạn / vĩnh viễn) + plugin thường đã mua ---- */
-ROUTES['#/u/downloads'] = { title:'Kho Plugin đã mua', user:true, html(){
+/* ---- U3 TẢI FILE — 24/11/2026: VIP chỉ 1 mục (Plugin bản VIP), FREE chỉ 1 mục (Plugin bản FREE), giao diện giống hệt nhau: thẻ license ẩn/hiện + nút tải + kiểm tra hạn ---- */
+ROUTES['#/u/downloads'] = { title:'Tải file', user:true, html(){
   const u = current();
   const pvs = (S.myPurchases||[]).slice();
   const allLics = (S.myLicenses||[]);
-  const lics = allLics.filter(licValid).sort((a,b)=>(b.days||0)-(a.days||0));
-  const expired = allLics.length - lics.length;
-  const rows = pvs.map(pv => ({pv, pl: cartPlugin(pv.pluginId) || {}}));
-  const top = lics[0];
-  const topStatus = top ? licStatus(top) : null;
+  const vipLic = myVipKey();
+  const freeLic = myFreeKey();
+  const vip = myLevel() === 'vip' && !!vipLic;
+  const lockCount = allLics.filter(l => !licValid(l)).length;
+  const verOf = id => { const p = (S.plugins||[]).find(x=>x.id===id); return p ? 'v' + p.version : ''; };
   /* key đầy đủ chỉ hiển thị ĐÚNG 1 LẦN sau khi mua — xóa storage SAU khi đã vẽ (tránh race double-render) */
   let reveal = null;
   try{ reveal = JSON.parse(sessionStorage.getItem('DL_REVEAL_KEY') || 'null'); }catch(e){}
   if(reveal) setTimeout(() => sessionStorage.removeItem('DL_REVEAL_KEY'), 80);
   return `
-  <h1 class="pagetitle">Kho Plugin đã mua<span class="tagchip">tải theo license, server kiểm quyền từng lần</span></h1>
-  ${reveal ? `<div class="card" style="border-color:#f0b642"><h3>🔑 License key của bạn — CHỈ hiển thị ĐÚNG 1 LẦN này</h3>
+  <h1 class="pagetitle">Tải file<span class="tagchip">1 mục duy nhất theo cấp tài khoản — server kiểm quyền + hạn từng lần tải</span></h1>
+  ${reveal ? `<div class="card" style="border-color:#f0b642"><h3>🔑 Key của bạn — CHỈ hiển thị ĐÚNG 1 LẦN này</h3>
     <div class="subtitle">Lưu lại ngay (copy vào chỗ an toàn). Sau khi rời trang, key luôn hiện dạng ẩn <span class="code">${esc(maskKey(reveal.key))}</span> — dùng trang <a href="#/u/license-check">🔍 Tra cứu key</a> để xem trạng thái bằng cách nhập key đầy đủ.</div>
     <div style="font-size:1.5rem;letter-spacing:2px"><span class="code">${esc(reveal.key)}</span> <button class="btn btn-sm" data-act="copy-key" data-key="${esc(reveal.key)}">📋 Copy</button> <span class="badge b-warn">${esc(reveal.label || 'license')}</span></div>
   </div>` : ''}
-  ${top ? `<div class="ok-msg">🎫 License hiện tại: <span class="code">${esc(maskKey(top.key))}</span> — mốc <b>${esc(top.package)}</b> · ${top.expires ? 'hết hạn ' + fmtDate(top.expires) + ' (còn ' + daysUntil(top.expires) + ' ngày)' : '<b>Vĩnh viễn — không bao giờ hết hạn</b>'} <span class="badge ${topStatus[1]}" style="margin-left:6px">${topStatus[0]}</span></div>`
-    : `<div class="warn-call">Bạn chưa có license còn hạn — mua mốc thời hạn (30/180/365 ngày hoặc Vĩnh viễn) tại <a href="#/shop">cửa hàng</a> để mở toàn bộ file tải.</div>`}
-  ${lics.length ? `
-  <div class="card"><h3>✅ File tải theo license (${lics.length} license còn hạn) — chỉ cần license còn hạn hay vĩnh viễn là tải được</h3>
-    <div class="tbl-wrap"><table class="tbl">
-      <thead><tr><th>License key (ẩn)</th><th>Mốc thời hạn</th><th>Hết hạn</th><th>File tải tương ứng</th></tr></thead>
-      <tbody>${lics.map(l=>{
-        const st = licStatus(l);
-        const verOf = id => { const p = (S.plugins||[]).find(x=>x.id===id); return p ? 'v' + p.version : ''; };
-        return `<tr><td><span class="code">${esc(maskKey(l.key))}</span></td><td><b>${esc(l.package)}</b></td>
-        <td>${l.expires?fmtDate(l.expires)+' <span class="muted">(còn '+daysUntil(l.expires)+' ngày)</span>':'<span class="badge b-ok">Vĩnh viễn</span>'} <span class="badge ${st[1]}" style="margin-left:4px">${st[0]}</span></td>
-        <td><span class="pill-row" style="margin:0">
-          <button class="btn btn-p btn-sm" data-act="dl-lic" data-f="rp-full">⬇ Plugin FULL ${esc(verOf('PL-MAIN'))}</button>
-          <button class="btn btn-t btn-sm" data-act="dl-lic" data-f="add-on">⬇ Add-on Lam Điện ${esc(verOf('PL-LAMDIEN'))}</button>
-          <button class="btn btn-sm" data-act="dl-lic" data-f="rp-free">⬇ RP FREE ${esc(verOf('PL-RPFREE'))}</button>
-        </span></td></tr>`;}).join('')}</tbody>
-    </table></div>
-    <p class="muted" style="margin-top:8px">🔒 Key KHÔNG hiển thị đầy đủ trên màn hình. Bấm nút tải → nhập license key đầy đủ (server kiểm tra hạn từng lần tải, key sai/hết hạn bị từ chối). Nút tải luôn dẫn tới <b>bản mới nhất</b> server đang giữ theo bản của bạn (VIP/FREE).</p>
-  </div>` : ''}
-  ${rows.length ? `<div class="card"><h3>📦 Plugin đã mua riêng (${rows.length})</h3>
-    ${rows.map(({pv, pl})=>`
+  ${vip ? `
+  <div class="ok-msg">💎 Cấp tài khoản: <b>VIP</b> — License hiện tại: <span class="code" id="keyview-vip" data-shown="0">${esc(maskKey(vipLic.key))}</span> <button class="btn btn-sm" data-act="toggle-key" data-id="vip" data-key="${esc(vipLic.key)}">👁 Ẩn/Hiện</button> — mốc <b>${esc(vipLic.package)}</b> · ${vipLic.expires ? 'hết hạn ' + fmtDate(vipLic.expires) + ' (còn ' + daysUntil(vipLic.expires) + ' ngày)' : '<b>Vĩnh viễn — không bao giờ hết hạn</b>'}</div>
+  <div class="card"><h3>⬇ Mục tải của VIP (1 mục duy nhất)</h3>
+    <div class="nitem" style="border-left-color:var(--gold)">
+      <div class="ntitle">🔌 Plugin bản VIP — file mới nhất <span class="badge b-ok">${esc(verOf('PL-MAIN'))}</span></div>
+      <div class="nbody">Bấm tải → nhập license VIP đầy đủ (DL-...). Server kiểm tra key + hạn TỪNG LẦN tải; key sai / hết hạn / bị thu hồi bị từ chối.</div>
+      <div class="nmeta"><button class="btn btn-p btn-sm" data-act="dl-lic" data-f="vip">⬇ Tải Plugin bản VIP (mới nhất)</button></div>
+    </div>
+    <p class="muted" style="margin-top:8px">🔒 VIP chỉ có 1 mục tải: Plugin bản VIP (file mới nhất, kèm resource pack). Nút tải luôn dẫn tới bản mới nhất server đang giữ.</p>
+  </div>`
+  : `
+  <div class="ok-msg">🆓 Cấp tài khoản: <b>FREE</b> — KEY bản FREE: ${freeLic ? `<span class="code" id="keyview-free" data-shown="0">${esc(maskKey(freeLic.key))}</span> <button class="btn btn-sm" data-act="toggle-key" data-id="free" data-key="${esc(freeLic.key)}">👁 Ẩn/Hiện</button>` : '<span class="code">chưa có — liên hệ admin</span>'} — <span class="badge b-ok">Vĩnh viễn, không hết hạn</span></div>
+  <div class="card"><h3>⬇ Mục tải của FREE (1 mục duy nhất)</h3>
+    <div class="nitem" style="border-left-color:var(--teal)">
+      <div class="ntitle">🔌 Plugin bản FREE — file mới nhất <span class="badge b-ok">${esc(verOf('PL-FREE'))}</span></div>
+      <div class="nbody">Bấm tải → nhập KEY FREE đầy đủ (DF-...). Server kiểm tra key TỪNG LẦN tải; key sai bị từ chối.</div>
+      <div class="nmeta"><button class="btn btn-p btn-sm" data-act="dl-lic" data-f="free" ${freeLic ? '' : 'disabled'}>⬇ Tải Plugin bản FREE (mới nhất)</button> <a class="btn btn-sm" href="#/shop">⬆ Nâng cấp VIP — mở Plugin bản VIP</a></div>
+    </div>
+    <p class="muted" style="margin-top:8px">🎁 Mỗi tài khoản đăng ký được tặng 1 KEY FREE (DF) dùng vĩnh viễn. Giao diện tải giống hệt VIP: thẻ key ẩn/hiện + nút tải + kiểm tra hạn ở server.</p>
+  </div>`}
+  ${pvs.length ? `<div class="card"><h3>📦 Plugin đã mua riêng (${pvs.length})</h3>
+    ${pvs.map(({pv, pl})=>`
     <div class="nitem" style="border-left-color:var(--teal)">
       <div class="ntitle">${esc(pl.name || pv.pluginId)} <span class="badge b-ok">đã kích hoạt</span> <span class="badge b-mut">tải ${pv.downloads||0} lần</span></div>
       <div class="nbody">Đơn ${esc(pv.orderId)} · cấp quyền ${fmtDT(pv.grantedAt)}${pl.version?` · phiên bản ${esc(pl.version)}`:''}${pl.fileName?` · file ${esc(pl.fileName)} (${(pl.fileSize/1024).toFixed(0)}KB)`:''}</div>
@@ -3028,13 +3055,22 @@ ROUTES['#/u/downloads'] = { title:'Kho Plugin đã mua', user:true, html(){
       </div>
     </div>`).join('')}
   </div>` : ''}
-  ${expired > 0 ? `<div class="lock">🔒 Có ${expired} license đã hết hạn — link tải tương ứng đã bị server khóa. Gia hạn bằng cách mua mốc thời hạn mới tại <a href="#/shop">cửa hàng</a>.</div>` : ''}
+  ${lockCount > 0 ? `<div class="lock">🔒 Có ${lockCount} license đã hết hạn hoặc bị thu hồi — file tương ứng bị server khóa. Gia hạn bằng cách mua mốc thời hạn mới tại <a href="#/shop">cửa hàng</a>.</div>` : ''}
 `;}};
 /* tải file theo license: yêu cầu NHẬP key đầy đủ — key không nằm trong link/DOM */
 ACTIONS['dl-lic'] = (d) => {
-  const k = (prompt('Nhập LICENSE KEY đầy đủ của bạn để tải file (VIP dạng DL-VIP-9F2K-8817, bản FREE dạng DF-A1B2-4837). Key không được hiển thị sẵn trên trang này.') || '').trim().toUpperCase();
+  const hint = d.f === 'vip' ? 'Nhập LICENSE VIP đầy đủ (VIP dạng DL-VIP-9F2K-8817)' : 'Nhập KEY bản FREE đầy đủ (FREE dạng DF-A1B2-4837)';
+  const k = (prompt(hint + ' — server kiểm tra quyền + hạn từng lần tải.') || '').trim().toUpperCase();
   if(!k) return;
   location.href = '/api/download?lic=' + encodeURIComponent(k) + '&f=' + d.f;
+};
+/* ẩn/hiện key đầy đủ trên thẻ license (chỉ tài khoản sở hữu nhìn thấy) */
+ACTIONS['toggle-key'] = (d, el) => {
+  const span = document.getElementById('keyview-' + d.id);
+  if(!span) return;
+  const shown = span.dataset.shown === '1';
+  span.textContent = shown ? maskKey(d.key) : d.key;
+  span.dataset.shown = shown ? '0' : '1';
 };
 ACTIONS['copy-key'] = (d, el) => {
   const done = () => { toast('📋 Đã copy key — dán vào chỗ an toàn, trang này không lưu.'); };
@@ -3907,7 +3943,7 @@ const AGROUPS = [
     ['#/a/referrals', 'A5 Giới thiệu (referral)', 'Duyệt hoa hồng giới thiệu']
   ]],
   ['License & Key', '🎫', '#f0b642', [
-    ['#/a/grant-vip', '⬆ A20 Nâng cấp VIP', 'Cấp license 30/180/365/VV cho user, không cần thanh toán'],
+    ['#/a/grant-vip', '⬆⬇ A20 Nâng/hạ cấp VIP', 'Nâng lên VIP hoặc hạ về FREE — ghi nhật ký đầy đủ'],
     ['#/a/mint-key', '🔑 A21 Tạo key thủ công', 'Sinh key gán user hoặc key rời để phát sau'],
     ['#/a/pricing', 'A13 Mốc thời hạn & giá', 'Sửa số ngày / giá / % giảm của 4 mốc'],
     ['#/a/plugins', 'A14 Quản lý Plugin', 'Thêm/sửa/xóa Plugin, upload file']
@@ -4360,9 +4396,11 @@ FORMS['a13-pricing'] = d => {
 
 /* ---- A20 Nâng cấp VIP cho 1 tài khoản (không cần khách thanh toán) ---- */
 let A20_RESULT = null;
+let A22_RESULT = null;
 ROUTES['#/a/grant-vip'] = { title:'Nâng cấp VIP', admin:true, html(){
   const ts = getTiers();
   const log = (S.admin||{}).grantLog||[];
+  const lv = (S.admin||{}).levelLog||[];
   return `
   <h1 class="pagetitle">⬆ Nâng cấp VIP cho tài khoản<span class="tagchip">không cần khách thanh toán</span></h1>
   <div class="subtitle">Cấp trực tiếp license theo mốc thời hạn (30/180/365 ngày hoặc Vĩnh viễn) cho 1 tài khoản bất kỳ — hỗ trợ, khuyến mãi, xử lý khiếu nại. Server sinh key, gán vào tài khoản và thông báo cho khách ngay.</div>
@@ -4377,17 +4415,38 @@ ROUTES['#/a/grant-vip'] = { title:'Nâng cấp VIP', admin:true, html(){
     </form>
     ${A20_RESULT ? `<div class="ok-msg" style="margin-top:12px">${esc(A20_RESULT.msg)} ${A20_RESULT.key ? `<button class="btn btn-sm" data-act="copy-key" data-key="${esc(A20_RESULT.key)}">📋 Copy key</button>` : ''}</div>` : ''}
   </div>
+  <div class="card" style="border-color:#ef6f6f"><h3>⬇ Hạ cấp VIP → FREE (A22 — admin hạ thủ công)</h3>
+    <div class="subtitle" style="margin-bottom:8px">Thu hồi toàn bộ license VIP còn hạn (GIỮ BẢN GHI, không xóa dữ liệu), cấp key bản FREE (DF) nếu tài khoản chưa có, ghi nhật ký + thông báo khách. VIP hết hạn sẽ tự hạ về FREE ở server mà không cần bấm nút này.</div>
+    <form data-form="a22-demote" class="form-inline">
+      <div class="form-row" style="flex:2"><label>Tài khoản (username hoặc email)</label><input name="who" required placeholder="VD: khach1"></div>
+      <div class="form-row" style="flex:2"><label>Lý do (ghi log + thông báo)</label><input name="reason" placeholder="VD: khách yêu cầu / xử lý khiếu nại"></div>
+      <button class="btn btn-d">⬇ Hạ về FREE</button>
+    </form>
+    ${A22_RESULT ? `<div class="${A22_RESULT.ok ? 'ok-msg' : 'err-call'}" style="margin-top:12px">${esc(A22_RESULT.msg)}</div>` : ''}
+  </div>
   <div class="card"><h3>📜 Log cấp/gán license gần đây (${log.length}) — key hiện dạng ẩn</h3>
     <div class="tbl-wrap"><table class="tbl">
       <thead><tr><th>Thời gian</th><th>Bởi</th><th>Hành động</th><th>Key (ẩn)</th><th>Cho ai</th><th>Mốc</th></tr></thead>
       <tbody>${log.map(g=>`<tr><td>${esc(fmtDT(g.at))}</td><td>${esc(g.by)}</td><td>${g.act==='grant-vip'?'⬆ nâng cấp':(g.act==='mint-key'?'🔑 tạo key rời':'📎 gán key')}</td>
       <td><span class="code">${esc(maskKey(g.key))}</span></td><td>${esc(g.who)}</td><td><b>${esc(g.package)}</b></td></tr>`).join('') || '<tr><td colspan="6" class="muted">Chưa có log — chưa cấp/gán license nào từ admin.</td></tr>'}</tbody>
     </table></div>
+  </div>
+  <div class="card"><h3>📊 Nhật ký đổi cấp FREE/VIP (${lv.length}) — ghi tại server: ai, lúc nào, từ gì sang gì</h3>
+    <div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>Thời gian</th><th>Bởi</th><th>Hành động</th><th>Tài khoản</th><th>Từ</th><th>Sang</th><th>Key (ẩn)</th><th>Lý do</th></tr></thead>
+      <tbody>${lv.map(g=>`<tr><td>${esc(fmtDT(g.at))}</td><td>${esc(g.by)}</td><td>${esc(g.act)}</td><td><b>${esc(g.who)}</b></td><td>${esc(g.from)}</td><td>${esc(g.to)}</td><td>${(g.keys||[]).map(k=>`<span class="code">${esc(maskKey(k))}</span>`).join('<br>')||'—'}</td><td class="muted">${esc(g.reason||'')}</td></tr>`).join('') || '<tr><td colspan="8" class="muted">Chưa có thay đổi cấp độ nào (đăng ký mới/nâng cấp/hạ cấp/hết hạn sẽ hiện tại đây).</td></tr>'}</tbody>
+    </table></div>
   </div>`;
 }};
 FORMS['a20-grant'] = async (d) => {
   const r = await API('admin', {act:'grant-vip', who: d.who.trim(), tierId: d.tierId, reason: (d.reason||'').trim()});
   A20_RESULT = r.ok ? {msg: r.msg, key: (r.msg.match(/DL-VIP-[A-Z0-9]{4}-\d{4}/) || [''])[0]} : {msg: r.msg, key: ''};
+  toast(r.msg, !r.ok);
+  await fetchState(true); render();
+};
+FORMS['a22-demote'] = async (d) => {
+  const r = await API('admin', {act:'demote-free', who: d.who.trim(), reason: (d.reason||'').trim()});
+  A22_RESULT = {msg: r.msg, ok: r.ok};
   toast(r.msg, !r.ok);
   await fetchState(true); render();
 };

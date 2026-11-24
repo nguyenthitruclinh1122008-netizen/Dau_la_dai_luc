@@ -20,14 +20,17 @@ function getAdmin(req, st){
   if(!C.adminTicketValid(user.id, ticket)) return null;
   return user;
 }
-function safeUser(u){
-  return {
+function safeUser(u, st){
+  const out = {
     id: u.id, username: u.username, email: u.email || '', role: u.role, banned: !!u.banned,
     banReason: u.banReason || '', createdAt: u.createdAt, points: u.points || 0,
     pointLog: u.pointLog || [], balance: u.balance || 0, referralCode: u.referralCode,
     referredBy: u.referredBy || null, twoFA: {enabled: !!(u.twoFA && u.twoFA.enabled)},
     readNotifs: u.readNotifs || [], avatar: u.avatar || '', displayName: u.displayName || ''
   };
+  /* 24/11/2026: cấp độ tài khoản tính tại SERVER từ license (VIP = có DL- còn hạn, ngược lại FREE) */
+  if(st) out.level = C.userLevel(st, u);
+  return out;
 }
 function safePlugin(p){
   return {

@@ -283,16 +283,40 @@ module.exports = async (req, res) => {
           if(!user) return {out: {ok:false, msg:'Không tìm thấy tài khoản "' + body.who + '" theo username hoặc email.'}};
           if(user.banned) return {out: {ok:false, msg:'Tài khoản ' + user.username + ' đang bị khóa — mở khóa trước khi cấp license.'}};
         }
+        const fromLv = user ? C.userLevel(st, user) : null;   /* log: từ gì -> vip */
         const lic = O.makeLicense(st, tier, user, act === 'grant-vip' ? 'admin-grant:' + me.username : 'admin-mint:' + me.username);
         const label = lic.package;
         S.grantLog = S.grantLog || [];
         S.grantLog.unshift({at: now, by: me.username, act, key: lic.key, who: user ? user.username : '(key rời — chưa gán)', package: label, days: Number(tier.days) || 0});
         if(S.grantLog.length > 100) S.grantLog.length = 100;
         if(user){
+          /* 24/11/2026: nhật ký đổi cấp (nâng Free -> VIP bởi admin) */
+          O.logLevel(st, {by: me.username, act: 'upgrade (admin)', who: user.username, from: fromLv, to: 'vip', keys: [lic.key], reason: C.cleanStr(body.reason, 120) || 'Admin nâng cấp trực tiếp'});
           O.notify(st, user.id, 'license', 'Bạn được cấp license ' + label + ' từ quản trị viên', 'Key của bạn (ẩn một phần: ' + lic.key.split('-').slice(0, 3).join('-') + '-****-' + lic.key.split('-').pop() + ') đã gán vào tài khoản ' + user.username + '. Lý do: ' + (C.cleanStr(body.reason, 100) || 'hỗ trợ/khuyến mãi từ admin') + '. Vào "Tra cứu key" nhập key để xem chi tiết.');
           return {out: {ok:true, msg:'⬆ Đã NÂNG CẤP ' + user.username + ' lên ' + label + ' — key: ' + lic.key + (lic.expires ? ' (hết hạn ' + lic.expires + ')' : ' (không bao giờ hết hạn)')}};
         }
         return {out: {ok:true, msg:'🔑 Đã tạo key ' + label + ' RỜI (chưa gán ai): ' + lic.key + ' — giao cho người dùng sau, hoặc gán tại ô "Gán key cho tài khoản".'}};
+      }
+      /* 24/11/2026 — A22 HẠ CẤP VIP -> FREE thủ công: thu hồi license VIP (giữ bản ghi, không xóa dữ liệu),
+         cấp key bản FREE nếu chưa có, ghi nhật ký đầy đủ + thông báo khách */
+      if(act === 'demote-free'){
+        const q = C.cleanStr(body.who, 60).toLowerCase();
+        const user = (st.users || []).find(x => x.username.toLowerCase() === q || (x.email || '').toLowerCase() === q);
+        if(!user) return {out: {ok:false, msg:'Không tìm thấy tài khoản "' + body.who + '" theo username hoặc email.'}};
+        if(user.role === 'admin') return {out: {ok:false, msg:'Không hạ cấp tài khoản quản trị.'}};
+        const fromLv = C.userLevel(st, user);
+        const vips = (st.licenses || []).filter(l => l.userId === user.id && C.isVipKey(l.key) && !l.revoked);
+        if(fromLv === 'free' && !vips.length) return {out: {ok:false, msg:'Tài khoản này đã là bản FREE và không có license VIP nào để thu hồi.'}};
+        const keys = [];
+        for(const l of vips){
+          l.revoked = true; l.revokedAt = now; l.revokedBy = me.username;
+          l.revokedReason = C.cleanStr(body.reason, 120) || 'Admin hạ cấp về FREE';
+          keys.push(l.key);
+        }
+        const df = O.ensureFreeKey(st, user);
+        O.logLevel(st, {by: me.username, act: 'demote (admin)', who: user.username, from: fromLv, to: 'free', keys, reason: C.cleanStr(body.reason, 120) || 'Admin hạ cấp thủ công'});
+        O.notify(st, user.id, 'license', 'Tài khoản đã chuyển về bản FREE', 'License VIP (' + (keys.join(', ') || 'không có') + ') đã được thu hồi bởi quản trị viên. KEY bản FREE (' + df.key + ') vẫn giữ nguyên — tải Plugin bản FREE trong "Tải file". Mua lại VIP bất cứ lúc nào.');
+        return {out: {ok:true, msg:'⬇ Đã HẠ ' + user.username + ' từ ' + fromLv.toUpperCase() + ' về FREE — thu hồi ' + keys.length + ' license VIP' + (keys.length ? ' (' + keys.join(', ') + ')' : '') + ' — key FREE: ' + df.key}};
       }
       if(act === 'assign-key'){
         const lic = (st.licenses || []).find(l => l.key === C.cleanStr(body.key, 40).toUpperCase());

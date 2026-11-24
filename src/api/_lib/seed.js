@@ -67,7 +67,16 @@ function seedState(){
         features:['4 texture 2D 64×64','Đã bỏ "parent": item/handheld — sửa lỗi item vô hình','Dùng được cho client 1.21.1 không cần license'],
         installGuide:'1. Tải file zip trong "Kho Plugin đã mua" (miễn phí — đặt hàng giá 0).\n2. Copy zip vào resourcepacks/ của client 1.21.1.\n3. Chọn pack trong Options → Resource Packs.',
         usageGuide:'Cần plugin để có item: mua plugin chính hoặc dùng server có cài Đấu La Đại Lục.',
-        createdAt:'2026-11-20'}
+        createdAt:'2026-11-20'},
+      /* 24/11/2026 — Plugin bản FREE: 1 mục tải duy nhất cho tài khoản FREE (key DF).
+         fileUrl trỏ endpoint jar FREE của site chính — luôn là bản MỚI NHẤT đang host. ẨN khỏi cửa hàng (published:false). */
+      {id:'PL-FREE', slug:'dauladailuc-free', fileUrl:'https://dau-la-dai-luc-livid.vercel.app/api/download/free', fileKey:null, fileName:'DauLaDaiLuc-Free-latest.jar', fileSize:0, name:'Đấu La Đại Lục — Plugin bản FREE', category:'Plugin FREE', kind:'plugin', licensing:false,
+        version:'3.16.8', price:0, sale:0, published:false, best:false, image:'/img/pl-generic.jpg',
+        description:'Plugin bản FREE — tải cho tài khoản FREE (key DF tặng tự động khi đăng ký). File luôn là bản mới nhất đang host trên hệ thống.',
+        features:['Võ hồn + Hồn Kỹ cơ bản','Miễn phí vĩnh viễn với key DF','Nâng cấp VIP bất cứ lúc nào để mở bản VIP'],
+        installGuide:'1. Vào "Tải file", nhập KEY FREE (DF-...) để tải jar mới nhất.\n2. Thả jar vào plugins/ (Paper/Spigot 1.17+), restart.\n3. Vào game gõ /dl thuctinh.',
+        usageGuide:'/dl — xem thông tin Hồn Sư · /dl thuctinh — thức tỉnh Võ Hồn.',
+        createdAt:'2026-11-24'}
     ],
     purchases: [],
     deposits: [

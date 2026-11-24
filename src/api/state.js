@@ -10,12 +10,36 @@ module.exports = async (req, res) => {
     const me = A.getAuth(req, st);
     const admin = me && me.role === 'admin';
     const settings = st.settings || {};
+    /* FIX 24/11/2026: settings.bank có thể THIẾU trong state cũ — truy cập an toàn, tránh 500 -> trang trắng */
+    const bank = settings.bank || {};
+    /* 24/11/2026 — HẠ CẤP TỰ ĐỘNG VIP -> FREE khi license hết hạn: đánh dấu + ghi log ĐÚNG 1 LẦN mỗi license */
+    if(me){
+      const expiredVip = (st.licenses || []).filter(l => l.userId === me.id && C.isVipKey(l.key) && l.expires && !l.revoked && !l.expiredHandled && new Date(l.expires + 'T23:59:59+07:00').getTime() < Date.now());
+      if(expiredVip.length){
+        try{
+          await C.withState(st2 => {
+            const u2 = (st2.users || []).find(x => x.id === me.id);
+            if(!u2) return;
+            const keys = [];
+            for(const ev of expiredVip){
+              const l2 = (st2.licenses || []).find(l => l.key === ev.key && l.userId === u2.id);
+              if(l2 && !l2.expiredHandled){ l2.expiredHandled = true; keys.push(l2.key); }
+            }
+            if(keys.length){
+              const df = O.ensureFreeKey(st2, u2);
+              O.logLevel(st2, {by: 'auto (server)', act: 'auto-expiry', who: u2.username, from: 'vip', to: 'free', keys, reason: 'License VIP hết hạn ' + expiredVip[0].expires + ' — tự động chuyển về bản FREE'});
+              O.notify(st2, u2.id, 'expiry', 'License VIP đã hết hạn — tài khoản chuyển về bản FREE', 'KEY bản FREE (' + df.key + ') vẫn giữ nguyên, tải được Plugin bản FREE trong "Tải file". Mua mốc thời hạn mới tại cửa hàng để lên lại VIP.');
+            }
+          });
+        }catch(e){ /* lỗi ghi log không chặn việc trả state */ }
+      }
+    }
     const data = {
       ok: true,
       serverTime: C.vnStr(),
       public: {
         licenseTiers: (settings.licenseTiers && settings.licenseTiers.length) ? settings.licenseTiers : O.tierDefaults(),
-        bank: {bin: settings.bank.bin, account: settings.bank.account, name: settings.bank.name, shortName: settings.bank.shortName, isSample: !!settings.bank.isSample},
+        bank: {bin: bank.bin, account: bank.account, name: bank.name, shortName: bank.shortName, isSample: !!bank.isSample},
         topupRates: settings.topupRates || {global: 20, carriers: {}},
         couponsActive: (st.coupons || []).filter(c => c.active).map(c => ({code: c.code, percent: c.percent, expires: c.expires})),
         changelog: st.changelog || []
@@ -24,7 +48,7 @@ module.exports = async (req, res) => {
       reviews: (st.reviews || []).filter(r => r.status === 'visible' || admin)
     };
     if(me){
-      data.me = A.safeUser(me);
+      data.me = A.safeUser(me, st);
       data.myOrders = (st.orders || []).filter(o => o.userId === me.id);
       data.myDeposits = (st.deposits || []).filter(d => d.userId === me.id);
       data.myPurchases = (st.purchases || []).filter(p => p.userId === me.id);
@@ -36,7 +60,7 @@ module.exports = async (req, res) => {
     }
     if(admin){
       data.admin = {
-        users: (st.users || []).map(A.safeUser),
+        users: (st.users || []).map(u => A.safeUser(u, st)),
         allOrders: st.orders || [],
         allDeposits: st.deposits || [],
         allPurchases: st.purchases || [],
@@ -44,6 +68,7 @@ module.exports = async (req, res) => {
         allReferrals: st.referrals || [],
         allLicenses: st.licenses || [],
         grantLog: settings.grantLog || [],
+        levelLog: settings.levelLog || [],
         coupons: st.coupons || [],
         reviewsAll: st.reviews || [],
         creditLog: settings.creditLog || [],

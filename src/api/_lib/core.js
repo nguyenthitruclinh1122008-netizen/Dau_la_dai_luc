@@ -38,10 +38,22 @@ const BLOB_TOKEN = process.env.BLOB_READ_WRITE_TOKEN || '';
 const STATE_PATH = 'db/daula-state-v1.json';
 const BLOB_API = 'https://blob.vercel-storage.com';
 
+/* FIX 24/11/2026 — NGUYÊN NHÂN TRANG TRẮNG (chẩn đoán trên BETA thật): fetch() trần đến
+   Blob đôi khi treo vĩnh viễn (network stall) → lambda không bao giờ trả response →
+   /api/state treo → SPA đợi fetchState mãi → body trắng, chỉ còn footer tĩnh.
+   MỌI fetch đến Blob từ giờ đều có AbortController timeout. */
+function sleep(ms){ return new Promise(res => setTimeout(res, ms)); }
+function fetchT(url, opts, ms){
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), ms || 5000);
+  return fetch(url, Object.assign({}, opts, {signal: ac.signal})).finally(() => clearTimeout(timer));
+}
+const BLOB_TIMEOUT = 5000;
+
 async function blobFetch(path, opts){
-  const r = await fetch(BLOB_API + path, Object.assign({}, opts, {
+  const r = await fetchT(BLOB_API + path, Object.assign({}, opts, {
     headers: Object.assign({}, (opts && opts.headers) || {}, {authorization: 'Bearer ' + BLOB_TOKEN})
-  }));
+  }), BLOB_TIMEOUT);
   return r;
 }
 async function blobPut(pathname, data, contentType){
@@ -75,18 +87,24 @@ function stateKey(pathname){
   return -1;
 }
 async function listRevs(){
-  const r = await fetch(BLOB_API + '?limit=100&prefix=' + encodeURIComponent(STATE_DIR + '/state'), {
-    headers: {authorization: 'Bearer ' + BLOB_TOKEN}
-  });
-  if(!r.ok) throw new Error('Blob list ' + r.status);
-  const d = await r.json();
-  const out = [];
-  for(const b of (d.blobs || [])){
-    const k = stateKey(b.pathname || '');
-    if(k >= 0) out.push({key: k, url: b.url});
+  let lastErr = null;
+  for(let i = 0; i < 3; i++){
+    try{
+      const r = await fetchT(BLOB_API + '?limit=100&prefix=' + encodeURIComponent(STATE_DIR + '/state'), {
+        headers: {authorization: 'Bearer ' + BLOB_TOKEN}
+      }, BLOB_TIMEOUT);
+      if(!r.ok) throw new Error('Blob list ' + r.status);
+      const d = await r.json();
+      const out = [];
+      for(const b of (d.blobs || [])){
+        const k = stateKey(b.pathname || '');
+        if(k >= 0) out.push({key: k, url: b.url});
+      }
+      out.sort((a, b) => a.key - b.key);
+      return out;
+    }catch(e){ lastErr = e; await sleep(350 * (i + 1)); }
   }
-  out.sort((a, b) => a.key - b.key);
-  return out;
+  throw lastErr || new Error('Blob list thất bại');
 }
 async function fetchUrl(url, tries){
   /* cache-buster: query là 1 phần của cache key CDN — query mới = MISS = luôn đọc origin */
@@ -95,7 +113,7 @@ async function fetchUrl(url, tries){
   let lastErr = null;
   for(let i = 0; i < n; i++){
     try{
-      const r = await fetch(busted);
+      const r = await fetchT(busted, undefined, BLOB_TIMEOUT);
       if(r.ok) return JSON.parse(await r.text());
       lastErr = new Error('Blob GET ' + url.slice(-30) + ' -> ' + r.status);
       if(r.status !== 404 && r.status !== 410) throw lastErr;
@@ -118,7 +136,7 @@ async function readLatestState(){
   }
   /* migrate: đọc file legacy nếu có */
   try{
-    const r = await fetch(BLOB_API + '?limit=50&prefix=' + encodeURIComponent(STATE_DIR + '/daula-state-v1'), {headers: {authorization: 'Bearer ' + BLOB_TOKEN}});
+    const r = await fetchT(BLOB_API + '?limit=50&prefix=' + encodeURIComponent(STATE_DIR + '/daula-state-v1'), {headers: {authorization: 'Bearer ' + BLOB_TOKEN}}, BLOB_TIMEOUT);
     if(r.ok){
       const d = await r.json();
       const leg = (d.blobs || []).find(b => b.pathname === STATE_DIR + '/daula-state-v1.json');
@@ -255,6 +273,21 @@ function ipOf(req){
   const h = req.headers;
   return (h['x-real-ip'] || h['x-forwarded-for'] || '').split(',')[0].trim() || 'unknown';
 }
+
+/* ---------- cấp độ tài khoản FREE / VIP (24/11/2026) ---------- */
+/* key VIP: DL-... · key FREE: DF-... */
+function isVipKey(k){ return String(k || '').startsWith('DL-'); }
+function isFreeKey(k){ return String(k || '').startsWith('DF-'); }
+/* license còn quyền tải: không bị thu hồi + chưa hết hạn (kiểm tra ở SERVER) */
+function licActive(l){
+  if(!l || l.revoked) return false;
+  return !l.expires || new Date(l.expires + 'T23:59:59+07:00').getTime() >= Date.now();
+}
+/* cấp độ theo license: có ít nhất 1 license VIP (DL-) còn hạn => vip, ngược lại free */
+function userLevel(st, u){
+  const vip = (st.licenses || []).some(l => l.userId === u.id && isVipKey(l.key) && licActive(l));
+  return vip ? 'vip' : 'free';
+}
 /* query params */
 function qOf(req){
   try{ return Object.fromEntries(new URL(req.url, 'http://x').searchParams.entries()); }
@@ -263,12 +296,13 @@ function qOf(req){
 
 module.exports = {
   json, ok, fail, uid, nowMs, isoDate, nowStr, vnNow, vnDate, vnStr,
-  clampInt, cleanStr,
+  clampInt, cleanStr, sleep, fetchT, BLOB_TIMEOUT,
   blobPut, blobDelete, withState, getState, putFile, STATE_PATH,
   hashPassword, checkPassword, newSessionToken, hashEqual,
   totpCode, verify2fa, genSecret32,
   parseCookies, sessionCookie, clearCookie,
-  adminTicket, adminTicketValid, rateHit, ipOf, qOf
+  adminTicket, adminTicketValid, rateHit, ipOf, qOf,
+  isVipKey, isFreeKey, licActive, userLevel
 };
 
 /* seedState được inject bởi seed.js (require vòng tránh lặp) */

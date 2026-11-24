@@ -108,6 +108,26 @@ function makeKey(kind){
   if(kind === 'FREE') return 'DF-' + g() + '-' + (1000 + Math.floor(Math.random() * 9000));
   return 'DL-' + kind + '-' + g() + '-' + (1000 + Math.floor(Math.random() * 9000));
 }
+/* URL dự phòng Plugin bản FREE (file mới nhất) — endpoint jar FREE của site chính,
+   luôn trả bản mới nhất đang host (đọc plugin.yml trong jar_files DB). Dùng khi store chưa có Plugin PL-FREE. */
+const FREE_PLUGIN_URL = 'https://dau-la-dai-luc-livid.vercel.app/api/download/free';
+/* đảm bảo user có đúng 1 key bản FREE (DF) — cấp nếu chưa có (dùng cho: đăng ký mới, hạ cấp VIP→FREE, hết hạn VIP) */
+function ensureFreeKey(st, u){
+  let lic = (st.licenses || []).find(l => l.userId === u.id && C.isFreeKey(l.key));
+  if(lic) return lic;
+  let key = makeKey('FREE');
+  while((st.licenses || []).some(l => l.key === key)) key = makeKey('FREE');
+  lic = {key, userId: u.id, package: 'Bản FREE', tierId: null, days: 0, expires: null, maxServers: 1, servers: [], via: 'auto', createdAt: C.vnStr()};
+  st.licenses.push(lic);
+  return lic;
+}
+/* nhật ký đổi cấp độ (FREE/VIP): ai, lúc nào, từ gì sang gì, vì sao — ghi tại SERVER */
+function logLevel(st, entry){
+  const S = st.settings = st.settings || {};
+  S.levelLog = S.levelLog || [];
+  S.levelLog.unshift(Object.assign({at: C.vnStr()}, entry));
+  if(S.levelLog.length > 300) S.levelLog.length = 300;
+}
 /* tạo license từ mốc thời hạn (tier) — gán cho user hoặc để key rời (userId null) phát sau */
 function makeLicense(st, tier, user, via){
   const days = Number(tier.days) || 0;
@@ -190,8 +210,10 @@ function grantOrder(st, order, user){
       /* license mới: thời hạn tính từ NGÀY DUYỆT — days=0 (hoặc legacy months=0 không có days) là vĩnh viễn */
       const days = line.kind === 'license' ? (Number(line.days) || 0) : (line.months > 0 ? line.months * 30 : 0);
       const label = line.kind === 'license' ? (line.tierLabel || tierLabel(days)) : (line.pkg || tierLabel(days));
+      const fromLv = C.userLevel(st, user);   /* ghi log nâng cấp: từ gì -> vip */
       const lic = {key: makeKey('VIP'), userId: user.id, package: label, tierId: line.tierId || null, days, expires: days > 0 ? new Date(Date.now() + days * 86400000).toISOString().slice(0, 10) : null, maxServers: days === 0 ? 2 : (days >= 180 ? 2 : 1), servers: []};
       st.licenses.push(lic);
+      logLevel(st, {by: 'purchase: ' + order.id, act: 'upgrade', who: user.username, from: fromLv, to: 'vip', keys: [lic.key], reason: 'Đơn ' + order.id + ' đã thanh toán — cấp ' + label});
       order.license = lic.key;
       purchased.push({name: line.name, kind:'license', key: lic.key, label, days});
     } else {
@@ -201,10 +223,10 @@ function grantOrder(st, order, user){
         st.purchases.push(purchase);
         purchased.push({name: line.name, kind:'plugin', purchaseId: purchase.id});
       } else purchased.push({name: line.name, kind:'plugin', purchaseId: existing.id});
-      /* bản FREE cũng phải có LICENSE KEY riêng (DL-FREE-XXXX-XXXX) — không cho dùng không key */
-      if(line.price === 0 && !st.licenses.some(l => l.userId === user.id && l.package === 'Bản thử miễn phí')){
-        const lic = {key: makeKey('FREE'), userId: user.id, package: 'Bản thử miễn phí', tierId: null, days: 0, expires: null, maxServers: 1, servers: [], via: 'free-order'};
-        st.licenses.push(lic);
+      /* bản FREE cũng phải có LICENSE KEY riêng (DF-XXXX-XXXX) — không cho dùng không key */
+      if(line.price === 0 && !st.licenses.some(l => l.userId === user.id && C.isFreeKey(l.key))){
+        const lic = ensureFreeKey(st, user);
+        lic.package = 'Bản thử miễn phí';
         if(!order.license || order.license === '—') order.license = lic.key;
         purchased.push({name: 'License bản thử miễn phí (' + lic.key + ')', kind:'free-license', key: lic.key, label: 'Bản thử miễn phí', days: 0});
       }
@@ -261,4 +283,4 @@ function confirmPayment(st, target, paidAmount, source, paidContent){
   }
 }
 
-module.exports = {CARRIERS, DENOMS, tlv, crc16, napasQR, cardGatewayCheck, walletAdd, notify, newOrderId, validateCoupon, tierLabel, tierDefaults, makeKey, makeLicense, createOrder, grantOrder, findPendingByContent, confirmPayment};
+module.exports = {CARRIERS, DENOMS, tlv, crc16, napasQR, cardGatewayCheck, walletAdd, notify, newOrderId, validateCoupon, tierLabel, tierDefaults, makeKey, makeLicense, createOrder, grantOrder, findPendingByContent, confirmPayment, FREE_PLUGIN_URL, ensureFreeKey, logLevel};
