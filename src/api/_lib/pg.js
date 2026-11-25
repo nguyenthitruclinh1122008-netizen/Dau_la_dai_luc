@@ -35,11 +35,15 @@ function active(){ return !!CONN.url; }
 /* ---------- frame IO ---------- */
 function connOnce(timeoutMs){
   return new Promise((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error('Postgres: kết nối quá hạn (' + CONN.host + ')')), timeoutMs || 8000);
+    let sockRef = null;
+    const t = setTimeout(() => {
+      try{ if(sockRef) sockRef.destroy(); }catch(_){}
+      reject(new Error('Postgres: kết nối quá hạn (' + CONN.host + ')'));
+    }, timeoutMs || 8000);
     const done = (err, sock) => { clearTimeout(t); if(err) reject(err); else resolve(sock); };
-    if(!CONN.ssl){ const s = net.connect(CONN.port, CONN.host); wire(s, done); return; }
+    if(!CONN.ssl){ const s = net.connect(CONN.port, CONN.host); sockRef = s; wire(s, done); return; }
     /* SSLRequest trước: nếu server đồng ý 'S' → TLS, 'N' → plaintext */
-    const pre = net.connect(CONN.port, CONN.host);
+    const pre = net.connect(CONN.port, CONN.host); sockRef = pre;
     let buf = Buffer.alloc(0);
     pre.on('connect', () => {
       const m = Buffer.alloc(8); m.writeInt32BE(8, 0); m.writeInt32BE(80877103, 4); pre.write(m);
@@ -50,7 +54,7 @@ function connOnce(timeoutMs){
       pre.removeAllListeners('data');
       pre.removeListener('error', onPreErr);
       if(buf[0] === 0x53){ /* S — upgrade TLS */
-        const s = tls.connect({socket: pre, servername: CONN.host, rejectUnauthorized: false});
+        const s = tls.connect({socket: pre, servername: CONN.host, rejectUnauthorized: false}); sockRef = s;
         wire(s, done);
       }else if(buf[0] === 0x4E){ /* N — plaintext */
         wire(pre, done);
@@ -62,8 +66,15 @@ function connOnce(timeoutMs){
 }
 function wire(sock, done){
   sock.setNoDelay(true);
-  sock.once('error', e => { try{sock.destroy();}catch(_){} done(new Error('Postgres socket: ' + e.message)); });
-  sock.once('connect', () => done(null, sock));
+  let fin = false;
+  const okSock = () => { if(!fin){ fin = true; done(null, sock); } };
+  sock.once('error', e => { if(fin) return; fin = true; try{sock.destroy();}catch(_){} done(new Error('Postgres socket: ' + e.message)); });
+  /* FIX 25/11 (Neon thật): TLSSocket nâng cấp từ SSLRequest KHÔNG PHÁT 'connect' — chỉ phát
+     'secureConnect' sau khi bắt tay TLS xong. Bản cũ chờ 'connect' nên MỌI kết nối TLS treo
+     đúng 8s rồi timeout (đã xác nhận trên BETA thật 6/6 lần) — còn Postgres thường không TLS
+     thì 'connect' phát bình thường nên test cục bộ trước đây vẫn pass. */
+  if(sock.encrypted){ sock.once('secureConnect', okSock); }
+  else{ sock.once('connect', okSock); }
 }
 
 function send(sock, type, payload){
@@ -128,12 +139,21 @@ function scramFinal(clientNonce, serverFirst, password){
   const ckey = crypto.createHmac('sha256', salted).update('Client Key').digest();
   const skey = crypto.createHash('sha256').update(ckey).digest();
   const clientFinalNoProof = 'c=biws,r=' + r;
-  const authMsg = 'n,,n=,r=' + clientNonce + ',' + serverFirst + ',' + clientFinalNoProof;
+  /* FIX 25/11 (RFC 5802): AuthMessage phải dùng client-first-BARE ("n=,r=…") — KHÔNG kèm
+     header gs2 "n,,". Bản cũ ghép cả "n,," nên server Postgres thật (Neon) tính chữ ký khác
+     → từ chối proof (28P01) ngay sau khi lỗi TLS được sửa. Chưa lộ ra trước đây vì kịch bản
+     Postgres E2E chưa từng chạy được trong sandbox. */
+  const authMsg = 'n=,r=' + clientNonce + ',' + serverFirst + ',' + clientFinalNoProof;
   const csig = crypto.createHmac('sha256', skey).update(authMsg).digest();
   const proof = Buffer.alloc(32);
   for(let k = 0; k < 32; k++) proof[k] = ckey[k] ^ csig[k];
   const clientFinal = clientFinalNoProof + ',p=' + proof.toString('base64');
-  const ssig = crypto.createHmac('sha256', skey).update(authMsg).digest();
+  /* FIX 25/11 (RFC 5802): ServerSignature = HMAC(ServerKey, AuthMessage) với
+     ServerKey = HMAC(SaltedPassword, "Server Key") — bản cũ dùng nhầm StoredKey nên
+     client tự từ chối chữ ký ĐÚNG của server ('chữ ký server không khớp').
+     Máy chủ giả lập TLS+SCRAM chuẩn RFC đã bắt được cả 3 lỗi này. */
+  const serverKey = crypto.createHmac('sha256', salted).update('Server Key').digest();
+  const ssig = crypto.createHmac('sha256', serverKey).update(authMsg).digest();
   return {clientFinal, expectServerSig: 'v=' + ssig.toString('base64')};
 }
 
@@ -306,7 +326,9 @@ const SCHEMA_DDL = [
 let _schemaReady = false;
 async function ensureSchema(){
   if(_schemaReady) return;
-  for(const ddl of SCHEMA_DDL) await runSimple(ddl);
+  /* FIX 25/11: gộp 3 DDL vào 1 kết nối (simple query nhận nhiều lệnh cách bằng ';')
+     — Neon cold start tiết kiệm 2 lần bắt tay TLS+SCRAM, /api/state dễ nằm trong lưới an toàn 12s */
+  await runSimple(SCHEMA_DDL.join(';\n'));
   _schemaReady = true;
 }
 

@@ -60,8 +60,16 @@ function fetchT(url, opts, ms){
   const ac = new AbortController();
   /* FIX 25/11: abort kèm LÝ DO TIẾNG VIỆT — khách thấy "Kho dữ liệu không phản hồi trong 3500ms"
      thay vì "This operation was aborted" khó hiểu (đã thấy trên BETA thật). */
-  const timer = setTimeout(() => ac.abort(new Error('Kho dữ liệu không phản hồi trong ' + (ms || 5000) + 'ms — thử lại sau ít phút')), ms || 5000);
-  return fetch(url, Object.assign({}, opts, {signal: ac.signal})).finally(() => clearTimeout(timer));
+  const reason = new Error('Kho dữ liệu không phản hồi trong ' + (ms || 5000) + 'ms — thử lại sau ít phút');
+  const timer = setTimeout(() => ac.abort(reason), ms || 5000);
+  /* abort giữa chừng đọc body (sau khi nhận headers) thì undici ném AbortError CHUNG không
+     kèm reason — thay bằng lý do tiếng Việt của chính mình để khách không bao giờ thấy tiếng Anh.
+     CHỈ bọc nhánh REJECT (.catch) — nhánh thành công phải trả nguyên Response. */
+  const armor = e => {
+    if(ac.signal.aborted && (!e || /abort/i.test(String((e && e.message) || '')))) throw (ac.signal.reason || reason);
+    throw e;
+  };
+  return fetch(url, Object.assign({}, opts, {signal: ac.signal})).catch(armor).finally(() => clearTimeout(timer));
 }
 const BLOB_TIMEOUT = 3500;
 
