@@ -10,7 +10,14 @@ module.exports = async (req, res) => {
        vẫn trả state seed + cờ degraded để SPA vẽ bình thường + banner "bảo trì"
        — KHÔNG còn trang trắng như trước đây. */
     let st, degraded = false, degWhy = '';
-    try{ st = await C.getState(); }
+    /* Lưới an toàn 12s: dù kho (Blob/Postgres) treo vô hạn thì /api/state vẫn trả lời trong ~12s
+       — SPA không bao giờ trắng màn hình chờ mãi (fix 25/11, tái áp lên kiến trúc mới). */
+    try{
+      st = await Promise.race([
+        C.getState(),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('Đọc kho dữ liệu quá 12 giây (timeout lưới an toàn /api/state)')), 12000))
+      ]);
+    }
     catch(e){ degraded = true; degWhy = C.cleanStr(e.message, 220); st = C.seedState(); }
     const me = A.getAuth(req, st);
     const admin = me && me.role === 'admin';

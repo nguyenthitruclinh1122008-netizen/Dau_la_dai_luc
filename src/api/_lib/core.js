@@ -58,7 +58,9 @@ if(pg) pg.init(process.env.DATABASE_URL);
 function sleep(ms){ return new Promise(res => setTimeout(res, ms)); }
 function fetchT(url, opts, ms){
   const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), ms || 5000);
+  /* FIX 25/11: abort kèm LÝ DO TIẾNG VIỆT — khách thấy "Kho dữ liệu không phản hồi trong 3500ms"
+     thay vì "This operation was aborted" khó hiểu (đã thấy trên BETA thật). */
+  const timer = setTimeout(() => ac.abort(new Error('Kho dữ liệu không phản hồi trong ' + (ms || 5000) + 'ms — thử lại sau ít phút')), ms || 5000);
   return fetch(url, Object.assign({}, opts, {signal: ac.signal})).finally(() => clearTimeout(timer));
 }
 const BLOB_TIMEOUT = 3500;
@@ -156,10 +158,14 @@ let _legacyChecked = false;
 /* chỉ dùng cho MIGRATE 1 lần khi db/state.json chưa tồn tại — đọc state cũ kiểu pathname-đuổi */
 async function blobLegacyReadLatest(){
   const revs = await listRevs();
-  for(let i = revs.length - 1; i >= 0; i--){
+  /* FIX 25/11: chỉ quét TỐI ĐA 3 bản MỚI NHẤT, mỗi bản GET đúng 1 lần — quét TOÀN BỘ danh sách
+     (mỗi file tới ~10,5s khi kho treo) là nguyên nhân /api/state treo nhiều phút → trang trắng
+     (xác nhận trên BETA thật 25/11). Hàm này chỉ chạy 1 lần/instance để migrate, nhưng vẫn phải có trần. */
+  const top = revs.slice(-3);
+  for(let i = top.length - 1; i >= 0; i--){
     try{
-      const st = await fetchUrl(revs[i].url);
-      if(validState(st)) return {st, rev: Math.max(1, st.rev || revs[i].key % 1e8)};
+      const st = await fetchUrl(top[i].url, 1);
+      if(validState(st)) return {st, rev: Math.max(1, st.rev || top[i].key % 1e8)};
     }catch(e){ /* file này chưa propagate / bị mất — thử file liền dưới */ }
   }
   return null;
