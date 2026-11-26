@@ -271,6 +271,13 @@ async function handleHeartbeat(req, res){
     if(!lic) return C.json(res, 200, {ok: false, reason: 'KEY_KHONG_TON_TAI'});
     if(licRevoked(lic)) return C.json(res, 200, {ok: false, reason: 'KEY_DA_THU_HOI'});
     expiry = licExpiry(lic) || LC.LIFETIME;
+    /* PARITY 1:1 với main thật (26/11, bắt được bằng harness đối chiếu): main
+       đọc licenses qua postgres.js — cột DATE trả về là Date object nên
+       String(...).slice(0,10) thành "Fri Nov 26" (không phải ISO). Plugin đang
+       chạy với định dạng này mỗi nhịp heartbeat trên web chính → tái hiện Y HỆT
+       (cả lỗi định dạng) để output giống từng byte. Vercel chạy TZ=UTC nên thứ
+       trong tuần ổn định. Nếu sau promote muốn trả ISO đúng, phải sửa CẢ HAI web cùng lúc. */
+    expiry = String(new Date(String(expiry).slice(0, 10) + 'T00:00:00Z')).slice(0, 10);
     boundServerId = lic.serverId || lic.fingerprint || null;
   }
   if(expiry !== LC.LIFETIME && LC.isExpired(expiry)) return C.json(res, 200, {ok: false, reason: 'KEY_HET_HAN'});
@@ -368,7 +375,8 @@ function verifyKeyState(st, key){
     if(licRevoked(lic)) return {valid: false, reason: 'KEY_DA_THU_HOI'};
     return {
       valid: true,
-      plan: lic.package || 'BẢN THƯỜNG (FREE)',
+      /* main: lic[0].pkg_name không tồn tại trên dòng license → luôn trả hằng này */
+      plan: 'BẢN THƯỜNG (FREE)',
       expires_at: null,
       lifetime: true,
       holder: maskName(licBuyer(st, lic) || 'thành viên'),
@@ -383,7 +391,9 @@ function verifyKeyState(st, key){
     if(LC.isExpired(exp == null ? null : exp)) return {valid: false, reason: 'KEY_HET_HAN', expires_at: exp.slice(0, 10)};
     return {
       valid: true,
-      plan: lic.package || 'PREMIUM',
+      /* main: lic[0].pkg_name không tồn tại (findLicense không join packages)
+         → luôn trả đúng chuỗi 'PREMIUM', không phải tên gói */
+      plan: 'PREMIUM',
       expires_at: exp.slice(0, 10),
       lifetime: exp.slice(0, 10) === '2275-12-31',
       holder: maskName(licBuyer(st, lic) || 'Khách VIP'),
