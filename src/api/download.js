@@ -42,16 +42,22 @@ module.exports = async (req, res) => {
       if(!pl.fileUrl) return C.json(res, 404, {ok:false, msg:'Admin chưa upload file cho Plugin này — thử lại sau.'});
       target = {fileUrl: pl.fileUrl, fileName: pl.fileName || (pl.slug + '.zip'), purchaseId: pv.id};
     }
-    /* 2) tải theo license — 24/11/2026 mô hình mới: VIP chỉ 1 mục (f=vip), FREE chỉ 1 mục (f=free) */
+    /* 2) tải theo license — 24/11/2026 mô hình mới: VIP chỉ 1 mục (f=vip), FREE chỉ 1 mục (f=free)
+       26/11/2026 (web-v2-promote): license migrate từ web chính có thể CHỈ LƯU BĂM (key_hash) —
+       tra theo plaintext HOẶC băm SHA-256 của key khách gửi, và phân loại VIP/FREE qua keyPrefix. */
     else if(q.lic && q.f){
-      const lic = (st.licenses || []).find(l => l.key === q.lic && l.userId === me.id);
+      const LC = require('./_lib/license-contract.js');
+      const licHash = LC.keyHash(String(q.lic || ''));
+      const lic = (st.licenses || []).find(l => l.userId === me.id && (l.key === q.lic || (l.keyHash && l.keyHash === licHash)));
       if(!lic) return C.json(res, 404, {ok:false, msg:'License không tồn tại hoặc không phải của bạn.'});
+      const isVip = C.isVipKey(lic.key) || (!lic.key && lic.keyPrefix === 'DL');
+      const isFree = C.isFreeKey(lic.key) || (!lic.key && lic.keyPrefix === 'FREE');
       if(lic.revoked) return C.json(res, 404, {ok:false, msg:'License đã bị thu hồi (tài khoản đã chuyển về bản FREE) — dùng key bản FREE (DF-) để tải, hoặc liên hệ admin.'});
       const expOk = C.licActive(lic);
       if(!expOk) return C.json(res, 404, {ok:false, msg:'License đã hết hạn — gia hạn để tải tiếp.'});
       if(q.f === 'vip'){
         /* Plugin bản VIP (file mới nhất) — CHỈ license VIP (DL-) còn hạn; key bản FREE bị từ chối tại SERVER */
-        if(!C.isVipKey(lic.key)) return C.json(res, 403, {ok:false, msg:'Key này không phải license VIP (DL-) — file VIP chỉ tải bằng license VIP còn hạn.'});
+        if(!isVip) return C.json(res, 403, {ok:false, msg:'Key này không phải license VIP (DL-) — file VIP chỉ tải bằng license VIP còn hạn.'});
         /* MỤC 7: ưu tiên bản jar VIP MỚI NHẤT admin upload (jarReleases) —fallback theo Plugin PL-MAIN */
         const rel = (st.jarReleases || []).find(r => r.pkg === 'vip' && r.latest);
         const pl = (st.plugins || []).find(p => p.id === 'PL-MAIN');
@@ -61,8 +67,8 @@ module.exports = async (req, res) => {
         target = {fileUrl: url, fileName: name, purchaseId: null, rel};
       }
       else if(q.f === 'free'){
-        /* Plugin bản FREE (file mới nhất) — cần key bản FREE (DF-) của chính tài khoản; mọi tài khoản đăng ký đều được cấp DF */
-        if(!C.isFreeKey(lic.key) && !/^FREE-/.test(lic.key)) return C.json(res, 403, {ok:false, msg:'File bản FREE tải bằng KEY FREE (DF-) của bạn — check email thông báo hoặc trang "Tải file".'});
+        /* Plugin bản FREE (file mới nhất) — cần key bản FREE của chính tài khoản; mọi tài khoản đăng ký đều được cấp DF */
+        if(!isFree && !/^FREE-/.test(String(lic.key || ''))) return C.json(res, 403, {ok:false, msg:'File bản FREE tải bằng KEY FREE (DF-) của bạn — check email thông báo hoặc trang "Tải file".'});
         /* MỤC 7: ưu tiên bản jar FREE MỚI NHẤT admin upload — fallback Plugin PL-FREE / site chính */
         const rel = (st.jarReleases || []).find(r => r.pkg === 'free' && r.latest);
         const pl = (st.plugins || []).find(p => p.id === 'PL-FREE');
@@ -73,7 +79,7 @@ module.exports = async (req, res) => {
       else{
         /* link cũ (rp-full/add-on/rp-free) giữ hoạt động theo quyền tương ứng */
         const map = {'rp-full': 'PL-MAIN', 'rp-free': 'PL-RPFREE', 'add-on': 'PL-LAMDIEN'};
-        if(q.f === 'rp-full' && !C.isVipKey(lic.key)) return C.json(res, 403, {ok:false, msg:'Plugin FULL chỉ tải bằng license VIP (DL-) còn hạn.'});
+        if(q.f === 'rp-full' && !isVip) return C.json(res, 403, {ok:false, msg:'Plugin FULL chỉ tải bằng license VIP (DL-) còn hạn.'});
         const pl = (st.plugins || []).find(p => p.id === map[q.f]);
         if(!pl || !pl.fileUrl) return C.json(res, 404, {ok:false, msg:'File chưa sẵn sàng — liên hệ admin.'});
         target = {fileUrl: pl.fileUrl, fileName: pl.fileName || (q.f + '.zip'), purchaseId: null};

@@ -537,6 +537,9 @@ module.exports = {
   clampInt, cleanStr, sleep, fetchT, BLOB_TIMEOUT,
   blobPut, blobDelete, withState, getState, putFile, STATE_PATH, blobList, blobGetRaw,
   DRIVER, fileUrlOf, seedState,
+  /* pg chỉ khác null khi DRIVER === 'postgres' — CHỈ dành cho migrate-v1 (đọc public.*,
+     SELECT thuần, bảng whitelist). Mọi nhánh thường của hệ thống KHÔNG đụng public.*. */
+  pg,
   hashPassword, checkPassword, newSessionToken, hashEqual,
   totpCode, verify2fa, genSecret32,
   parseCookies, sessionCookie, clearCookie,

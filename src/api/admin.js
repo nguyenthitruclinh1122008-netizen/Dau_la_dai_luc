@@ -442,6 +442,42 @@ module.exports = async (req, res) => {
         return {out: {ok:true, msg:'🔐 Đã đổi cổng quản trị — dùng mã + mật khẩu mới từ lần mở tiếp theo.'}};
       }
 
+      /* ---------- MIGRATE DỮ LIỆU KHÁCH TỪ WEB CHÍNH v1 (web-v2-promote) ---------- */
+      /* act=migrate-v1 — chỉ chạy khi DRIVER=postgres. dry=true (mặc định) chỉ ĐỌC nguồn
+         public.* (SELECT thuần, bảng whitelist) + trả BÁO CÁO ĐỐI CHIẾU; dry=false +
+         confirm='MIGRATE-V1' mới thay dữ liệu. Ghi nhận đầy đủ vào st.migrateV1. */
+      if(act === 'migrate-v1'){
+        if(C.DRIVER !== 'postgres' || !C.pg) return {out: {ok:false, msg:'Migration chỉ chạy ở chế độ kho POSTGRES (DATABASE_URL). Preview hiện không có kho Postgres — gắn DATABASE_URL (Neon branch bản sao dữ liệu thật) vào Preview rồi thử lại.'}};
+        const M = require('./_lib/migrate-v1.js');
+        const warnings = [];
+        let src, counts, byStatus, sumApproved, srcChecksum;
+        try{
+          ({src, counts, byStatus, sumApproved, checksum: srcChecksum} = await M.readSource(C.pg, warnings));
+        }catch(e){
+          return {out: {ok:false, msg:'Không đọc được DB nguồn (public.*): ' + String(e.message).slice(0, 160) + ' — kiểm tra DATABASE_URL/Neon trước khi migrate.'}};
+        }
+        const mapped = M.mapPackages(src);
+        const ctx = M.buildContext(src, mapped);
+        const dry = body.dry !== false;
+        const report = M.buildReport(src, counts, byStatus, sumApproved, srcChecksum, mapped, ctx, st);
+        if(warnings.length) report.warnings = warnings.concat(report.warnings || []);
+        if(dry){
+          return {out: {ok:true, dryRun:true, msg:'ĐỌC THỬ nguồn web chính xong (KHÔNG ghi gì) — xem chi tiết trong báo cáo kèm theo.', report}};
+        }
+        if(String(body.confirm || '') !== 'MIGRATE-V1'){
+          return {out: {ok:false, msg:'Thiếu confirm="MIGRATE-V1" — đây là thao tác THAY DỮ LIỆU, bắt buộc gõ confirm đầy đủ. Hãy chạy dry=true trước để xem báo cáo đối chiếu.'}};
+        }
+        if(st.migrateV1 && !body.force){
+          return {out: {ok:false, msg:'Đã migrate lúc ' + st.migrateV1.at + ' rồi. Chạy lại cần body.force=true (migrate có idempotent — keyHash/đơn trùng sẽ bị bỏ qua, không nhân đôi).'}};
+        }
+        const bank = M.mapBank(src.settings, st);
+        const applied = M.applyCommit(st, src, ctx, mapped, bank, {counts, srcChecksum});
+        report.dryRun = false;
+        report.applied = applied;
+        report.bank = bank;
+        return {out: {ok:true, msg:'✅ MIGRATE xong: +' + applied.licenses.added + ' license, +' + applied.orders.added + ' đơn, +' + applied.users.addedCount + ' tài khoản (merge ' + applied.users.merged.length + '). Xem st.migrateV1 + report đối chiếu.', report}};
+      }
+
       /* ---------- backup / restore ---------- */
       if(act === 'backup-get'){
         return {out: {ok:true, state: JSON.parse(JSON.stringify(Object.assign({}, st, {sessions: {}})))}};

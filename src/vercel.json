@@ -1,4 +1,18 @@
 {
+  "rewrites": [
+    {
+      "source": "/api/license/activate",
+      "destination": "/api/licenses?via=activate"
+    },
+    {
+      "source": "/api/license/heartbeat",
+      "destination": "/api/licenses?via=heartbeat"
+    },
+    {
+      "source": "/api/verify-key",
+      "destination": "/api/licenses?via=verifykey"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",

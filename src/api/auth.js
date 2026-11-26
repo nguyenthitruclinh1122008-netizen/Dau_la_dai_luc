@@ -65,7 +65,21 @@ module.exports = async (req, res) => {
         return C.fail(res, 429, 'Bạn đã sai quá nhiều lần — thử lại sau 10 phút.');
       const out = await C.withState(async st => {
         const u = (st.users || []).find(x => x.username.toLowerCase() === username.toLowerCase());
-        if(!u || !C.checkPassword(password, u.passHash)) return {out: {ok:false, msg:'Sai tên đăng nhập hoặc mật khẩu.'}};
+        /* 26/11/2026 (web-v2-promote) — CẦU NỐI MẬT KHẨU web chính v1: tài khoản migrate giữ
+           passV1 = {salt, hash} (scrypt 64 byte, chuẩn users.ts của v1). Sai hash v2 → thử v1;
+           đúng thì TỰ NÂNG CẤP sang hash v2 và xóa passV1 (khách không phải làm gì). */
+        const LC = require('./_lib/license-contract.js');
+        let okLogin = u ? C.checkPassword(password, u.passHash) : false;
+        let v1Upgrade = false;
+        if(!okLogin && u && u.passV1 && u.passV1.salt && u.passV1.hash){
+          okLogin = LC.checkPasswordV1(password, u.passV1.salt, u.passV1.hash);
+          if(okLogin){
+            u.passHash = C.hashPassword(password);
+            u.passV1 = null;
+            v1Upgrade = true;
+          }
+        }
+        if(!u || !okLogin) return {out: {ok:false, msg:'Sai tên đăng nhập hoặc mật khẩu.'}};
         if(u.banned) return {out: {ok:false, msg:'Tài khoản đã bị khóa: ' + (u.banReason || 'vi phạm quy định.')}};
         if(u.twoFA && u.twoFA.enabled){
           if(!code) return {out: {ok:false, need2fa:true, msg:'Tài khoản bật 2FA — nhập mã 6 số.'}};
@@ -94,7 +108,11 @@ module.exports = async (req, res) => {
         /* MỤC 8 (24/11/2026): đổi mật khẩu — server kiểm mật khẩu cũ, mới tối thiểu 8 ký tự,
            GIỚI HẠN số lần nhập sai (5 lần/15 phút), và ĐĂNG XUẤT mọi phiên đăng nhập KHÁC */
         if(!C.rateHit('pw:' + me.id, 5, 15 * 60 * 1000)) return {out: {ok:false, msg:'Bạn đã thử đổi mật khẩu quá 5 lần trong 15 phút — chờ rồi thử lại.'}};
-        if(!C.checkPassword(String(body.old || ''), me.passHash)){
+        /* 26/11/2026: mật khẩu hiện tại — chấp nhận cả hash v2 lẫn hash v1 (tài khoản migrate) */
+        const LCx = require('./_lib/license-contract.js');
+        let oldOk = C.checkPassword(String(body.old || ''), me.passHash);
+        if(!oldOk && me.passV1 && me.passV1.salt && me.passV1.hash) oldOk = LCx.checkPasswordV1(String(body.old || ''), me.passV1.salt, me.passV1.hash);
+        if(!oldOk){
           return {out: {ok:false, msg:'Mật khẩu hiện tại không đúng.'}};
         }
         if(String(body.nw || '').length < 8) return {out: {ok:false, msg:'Mật khẩu mới cần tối thiểu 8 ký tự.'}};
