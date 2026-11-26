@@ -11,6 +11,14 @@
     {
       "source": "/api/verify-key",
       "destination": "/api/licenses?via=verifykey"
+    },
+    {
+      "source": "/eula",
+      "destination": "/eula/index.html"
+    },
+    {
+      "source": "/privacy",
+      "destination": "/privacy/index.html"
     }
   ],
   "headers": [
