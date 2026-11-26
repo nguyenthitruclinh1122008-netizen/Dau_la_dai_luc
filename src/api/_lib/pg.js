@@ -22,6 +22,10 @@ function parseConn(urlStr){
   CONN.db = decodeURIComponent((u.pathname || '/postgres').slice(1) || 'postgres');
   CONN.pass = decodeURIComponent(u.password || '');
   CONN.ssl = sslParam ? ['require','verify-ca','verify-full','prefer','yes','true','1'].includes(sslParam) : !isLocal;
+  /* FIX 26/11: nhớ sslmode gốc — 'N' (server không TLS) + sslmode bắt buộc phải LỖI RÕ
+     ngay (đúng libpq), không được lặng lẽ chạy plaintext không mã hóa. */
+  CONN.sslMode = sslParam || (!isLocal ? 'require' : 'prefer');
+  CONN.sslReq = ['require','verify-ca','verify-full','yes','true','1'].includes(CONN.sslMode);
 }
 
 let _initPromise = null;
@@ -54,10 +58,21 @@ function connOnce(timeoutMs){
       pre.removeAllListeners('data');
       pre.removeListener('error', onPreErr);
       if(buf[0] === 0x53){ /* S — upgrade TLS */
-        const s = tls.connect({socket: pre, servername: CONN.host, rejectUnauthorized: false}); sockRef = s;
+        /* servername chỉ đặt khi host là hostname (SNI) — host dạng IP thì bỏ qua để tránh
+           DEP0123 (Node tương lai sẽ IGNORE servername IP — SNI sai thì Neon pooler vỡ routing) */
+        const s = tls.connect({socket: pre, servername: net.isIP(CONN.host) ? undefined : CONN.host, rejectUnauthorized: false}); sockRef = s;
         wire(s, done);
-      }else if(buf[0] === 0x4E){ /* N — plaintext */
-        wire(pre, done);
+      }else if(buf[0] === 0x4E){ /* N — server không TLS */
+        if(CONN.sslReq){
+          pre.destroy();
+          done(new Error('Postgres: máy chủ không hỗ trợ SSL nhưng sslmode=' + CONN.sslMode + ' bắt buộc TLS'));
+        }else{
+          /* FIX 26/11 (bắt được khi test SCRAM cục bộ): socket thường đã ở trạng thái
+             'open' (event 'connect' đã phát TRƯỚC khi wire() được gọi sau khi nhận 'N')
+             → once('connect') KHÔNG BAO GIỜ phát nữa → treo đúng 8s rồi timeout.
+             Socket đã 'open' thì hoàn tất ngay. */
+          wire(pre, done);
+        }
       }else{ pre.destroy(); done(new Error('Postgres: phản hồi SSL không rõ (' + buf[0] + ')')); }
     });
     const onPreErr = e => { try{pre.destroy();}catch(_){} done(new Error('Postgres TCP: ' + e.message)); };
@@ -74,6 +89,7 @@ function wire(sock, done){
      đúng 8s rồi timeout (đã xác nhận trên BETA thật 6/6 lần) — còn Postgres thường không TLS
      thì 'connect' phát bình thường nên test cục bộ trước đây vẫn pass. */
   if(sock.encrypted){ sock.once('secureConnect', okSock); }
+  else if(sock.readyState === 'open'){ okSock(); }  /* FIX 26/11: đường 'N' — đã connect từ trước */
   else{ sock.once('connect', okSock); }
 }
 
@@ -192,7 +208,12 @@ async function handshake(sock, read, timeoutMs){
         const sf = m.body.slice(4).toString('utf8');
         const f = scramFinal(scramState.nonce, sf, CONN.pass);
         scramState.expect = f.expectServerSig;
-        send(sock, 'p', msgBody([f.clientFinal]));
+        /* FIX 26/11 (08P01 trên Neon thật + PG17 thật): SASLResponse là "byten" — gửi ĐÚNG
+           bytes client-final-message, KHÔNG phải cstring. msgBody() nối thêm \0 ở cuối
+           → server thấy rác sau proof → 'malformed SCRAM message' (PG17 thật, tái hiện
+           trong 6 ms) / 'authentication protocol violation' (Neon thật). libpq cũng gửi
+           không \0. Lỗi chưa lộ trước đây vì E2E chạy dưới auth trust (không SCRAM). */
+        send(sock, 'p', Buffer.from(f.clientFinal, 'utf8'));
       }else if(code === 12 && scramState){        /* SASLFinal — server-final-message */
         const vf = m.body.slice(4).toString('utf8');
         if(vf !== scramState.expect) throw new Error('Postgres SCRAM: chữ ký server không khớp');
