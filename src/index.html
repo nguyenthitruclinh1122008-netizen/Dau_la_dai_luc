@@ -149,7 +149,7 @@ body.menu-open .drawer-mask{opacity:1;pointer-events:auto}
 <main class="wrap" id="app"></main>
 <footer class="wrap">
   <div>Đấu La Đại Lục — Cửa hàng Plugin bản quyền · web v2.0 (24/11/2026) — Cửa hàng + thanh toán QR/thẻ cào/ví + khu quản trị</div>
-  <div style="margin-top:4px">Web v2.0 — dữ liệu (tài khoản, đơn hàng, ví, Plugin) lưu trên <b>máy chủ dữ liệu</b> (Vercel Functions + Vercel Blob).</div>
+  <div style="margin-top:4px">Web v2.0 — dữ liệu (tài khoản, đơn hàng, ví, Plugin) lưu trên <b>máy chủ dữ liệu</b> (backend Vercel Functions).</div>
 </footer>
 <div id="toast"></div>
 <script>
@@ -2494,8 +2494,11 @@ async function fetchState(force){
   throw new Error((lastErr && lastErr.message) || 'Không kết nối được máy chủ dữ liệu');
 }
 function current(){ return S.me; }
-/* 25/11/2026 — banner chế độ bảo trì (kho dữ liệu đọc được nhưng ghi bị chặn / state seed):
-   thay cho "trang trắng" cũ — người dùng biết rõ hệ thống đang tạm giới hạn */
+/* 26/11/2026 — banner chế độ bảo trì (kho dữ liệu đọc không được → state seed):
+   text ĐỘNG theo lý do thật server trả về (degWhy). Bỏ text cũ còn nhắc
+   "Blob store tạm khóa theo quota Vercel — tự mở lại 24/12/2026" — đó là
+   chữ còn sót từ thời kho Blob; khi driver là Postgres banner phải nói đúng
+   nguyên nhân thật, không nói sai sự thật về Blob/quota/ngày mở lại. */
 function showDegradedBanner(d){
   const old = document.getElementById('dl-degraded');
   if(old) old.remove();
@@ -2503,7 +2506,7 @@ function showDegradedBanner(d){
   const bar = document.createElement('div');
   bar.id = 'dl-degraded';
   bar.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#7a2e0e;color:#ffd9b3;font:600 13px/1.4 system-ui;padding:10px 16px;text-align:center;box-shadow:0 -2px 8px rgba(0,0,0,.35)';
-  bar.textContent = '⚠ Hệ thống đang BẢO TRÌ kho dữ liệu (Blob store tạm khóa theo quota Vercel — tự mở lại 24/12/2026). Bạn vẫn xem được nội dung; đăng nhập / đăng ký / mua hàng tạm thời không khả dụng — quay lại sau hoặc liên hệ admin.';
+  bar.textContent = '⚠ Hệ thống đang BẢO TRÌ kho dữ liệu' + (d.degWhy ? ' — lý do: ' + d.degWhy : '') + '. Bạn vẫn xem được nội dung; đăng nhập / đăng ký / mua hàng tạm thời không khả dụng — quay lại sau hoặc liên hệ admin.';
   document.body.appendChild(bar);
 }
 function isAdmin(){ return S.me && S.me.role === 'admin'; }
