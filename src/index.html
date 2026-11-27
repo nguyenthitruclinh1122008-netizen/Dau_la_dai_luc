@@ -2826,7 +2826,7 @@ ROUTES['#/home'] = { title:'Trang chủ', html(){
         return `<a href="${href}" style="display:block;border:1px solid rgba(255,255,255,.14);border-radius:8px;padding:8px 10px;text-decoration:none"><b style="color:#f0b642">${f[1]}</b>${f[3]?' <span class="badge b-warn">quản trị</span>':''}</a>`;
       }).join('')}
     </div>
-    <div class="muted" style="margin-top:10px">Tài khoản: <span class="code">TRUC_LINH / TRUC_LINH</span> (quản trị — vào khu quản trị cần mã 6 số + mật khẩu quản trị) · demo khách: <span class="code">khach1 / 123456</span>. Dữ liệu lưu trên máy chủ (database Vercel), đăng nhập thiết bị nào cũng thấy đúng số dư.</div>
+    <div class="muted" style="margin-top:10px">Dữ liệu lưu trên máy chủ (database Vercel), đăng nhập thiết bị nào cũng thấy đúng số dư.</div>
   </div>
   <div class="card" style="margin-top:14px"><h3>🔧 Cập nhật mới nhất</h3>
     ${cl.map(c=>`<div class="nitem"><div class="ntitle">v${esc(c.version)} — ${esc(c.title)}</div><div class="nmeta">${fmtDate(c.date)}</div></div>`).join('')}
@@ -2850,7 +2850,6 @@ ROUTES['#/login'] = { title:'Đăng nhập', html(){
         <div class="form-row"><label>Mã 2FA 6 số (nếu đã bật)</label><input name="code" inputmode="numeric" placeholder="—— do bạn tự bật tại mục 2FA ——"></div>
         <button class="btn btn-p" style="width:100%">Đăng nhập</button>
       </form>
-      <div class="muted" style="margin-top:10px">Tài khoản — quản trị: <span class="code">TRUC_LINH / TRUC_LINH</span> · demo khách: <span class="code">khach1 / 123456</span></div>
       <div class="muted" style="margin-top:6px">Chưa có tài khoản? <a href="#/register"><b>Đăng ký ngay (miễn phí)</b></a></div>
       <div class="warn-call" style="margin-top:8px">🔐 Tài khoản quản trị: đăng nhập xong bấm tab <b>Khu quản trị</b> → nhập <b>mã 6 số</b> + <b>mật khẩu quản trị</b> (máy chủ xác thực, giữ phiên 30 phút).</div>
     </div>
@@ -4530,7 +4529,7 @@ ROUTES['#/a/grant-vip'] = { title:'Nâng cấp VIP', admin:true, html(){
   <div class="card"><h3>Chọn tài khoản + mốc thời hạn</h3>
     <form data-form="a20-grant">
       <div class="form-inline">
-        <div class="form-row" style="flex:2"><label>Tài khoản (tên đăng nhập hoặc email)</label><input name="who" required placeholder="VD: khach1 hoặc khach1@gmail.com"></div>
+        <div class="form-row" style="flex:2"><label>Tài khoản (tên đăng nhập hoặc email)</label><input name="who" required placeholder="VD: tên đăng nhập hoặc email"></div>
         <div class="form-row"><label>Mốc thời hạn</label><select name="tierId">${ts.map(t=>`<option value="${esc(t.id)}">${tierLabel(t)} — hiển thị ${fmtVND(Math.round(t.price*(100-(t.sale||0))/100))}</option>`).join('')}</select></div>
         <div class="form-row" style="flex:2"><label>Lý do (ghi log + thông báo)</label><input name="reason" placeholder="VD: bồi thường sự cố máy chủ / tặng quảng cáo"></div>
         <button class="btn btn-p">⬆ Nâng cấp ngay</button>
@@ -4541,7 +4540,7 @@ ROUTES['#/a/grant-vip'] = { title:'Nâng cấp VIP', admin:true, html(){
   <div class="card" style="border-color:#ef6f6f"><h3>⬇ Hạ cấp VIP → FREE (A22 — admin hạ thủ công)</h3>
     <div class="subtitle" style="margin-bottom:8px">Thu hồi toàn bộ license VIP còn hạn (GIỮ BẢN GHI, không xóa dữ liệu), cấp key bản FREE (DF) nếu tài khoản chưa có, ghi nhật ký + thông báo khách. VIP hết hạn sẽ tự hạ về FREE ở server mà không cần bấm nút này.</div>
     <form data-form="a22-demote" class="form-inline">
-      <div class="form-row" style="flex:2"><label>Tài khoản (tên đăng nhập hoặc email)</label><input name="who" required placeholder="VD: khach1"></div>
+      <div class="form-row" style="flex:2"><label>Tài khoản (tên đăng nhập hoặc email)</label><input name="who" required placeholder="VD: tên đăng nhập"></div>
       <div class="form-row" style="flex:2"><label>Lý do (ghi log + thông báo)</label><input name="reason" placeholder="VD: khách yêu cầu / xử lý khiếu nại"></div>
       <button class="btn btn-d">⬇ Hạ về FREE</button>
     </form>
