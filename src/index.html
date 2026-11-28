@@ -4189,7 +4189,7 @@ ROUTES['#/a/coupons'] = { title:'Quản lý mã giảm giá', admin:true, html()
   <div class="card"><h3>Tạo mã mới</h3>
     <form data-form="a3-new" class="form-inline">
       <div class="form-row"><label>Mã (viết hoa)</label><input name="code" required placeholder="VD: SUMMER25"></div>
-      <div class="form-row" style="max-width:110px"><label>Giảm (%)</label><input name="percent" type="number" min="1" max="90" value="15" required></div>
+      <div class="form-row" style="max-width:110px"><label>Giảm (%)</label><input name="percent" type="number" min="1" max="100" value="15" required></div>
       <div class="form-row" style="max-width:130px"><label>Giới hạn lượt</label><input name="maxUses" type="number" min="1" value="50" required></div>
       <div class="form-row" style="max-width:170px"><label>Hết hạn</label><input name="expires" type="date" value="2026-12-31" required></div>
       <button class="btn btn-p">Tạo mã</button>
@@ -4502,7 +4502,7 @@ ROUTES['#/a/pricing'] = { title:'Mốc thời hạn + giá', admin:true, html(){
             <td><b>${tierLabel(t)}</b>${t.best?' <span class="badge b-ok">hot</span>':''}${(t.sale||0)>0?` <span class="badge b-err">−${t.sale}%</span>`:''}</td>
             <td><input name="days_${i}" type="number" min="0" max="3650" value="${t.days}" style="max-width:110px"></td>
             <td><input name="price_${i}" type="number" min="0" step="1000" value="${t.price}" style="max-width:140px"></td>
-            <td><input name="sale_${i}" type="number" min="0" max="90" value="${t.sale||0}" style="max-width:80px"></td>
+            <td><input name="sale_${i}" type="number" min="0" max="100" value="${t.sale||0}" style="max-width:80px"></td>
             <td>${t.price ? `<b style="color:#f0b642">${fmtVND(eff)}</b>${t.sale>0?` <span class="muted" style="text-decoration:line-through">${fmtVND(t.price)}</span>`:''}` : '<span class="muted">Miễn phí</span>'}</td>
           </tr>`;}).join('')}</tbody>
       </table></div>
@@ -4762,7 +4762,7 @@ ROUTES['#/a/plugins'] = { title:'Quản lý Plugin', admin:true, html(){
         <div class="form-row" style="flex:2"><label>Tên</label><input name="name" value="${esc(e.name)}" required></div>
         <div class="form-row"><label>Danh mục</label><input name="category" value="${esc(e.category)}"></div>
         <div class="form-row" style="max-width:130px"><label>Giá (đ)</label><input name="price" type="number" min="0" value="${e.price}"></div>
-        <div class="form-row" style="max-width:90px"><label>Giảm %</label><input name="sale" type="number" min="0" max="90" value="${e.sale||0}"></div>
+        <div class="form-row" style="max-width:90px"><label>Giảm %</label><input name="sale" type="number" min="0" max="100" value="${e.sale||0}"></div>
         <div class="form-row" style="max-width:130px"><label>Phiên bản</label><input name="version" value="${esc(e.version)}"></div>
       </div>
       <div class="form-row"><label>Mô tả</label><textarea name="description" style="min-height:60px">${esc(e.description||'')}</textarea></div>

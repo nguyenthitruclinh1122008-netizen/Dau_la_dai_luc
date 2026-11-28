@@ -62,7 +62,7 @@ module.exports = async (req, res) => {
         const code = C.cleanStr(body.code, 20).toUpperCase().replace(/[^A-Z0-9]/g,'');
         if(!code) return {out: {ok:false, msg:'Mã không hợp lệ.'}};
         if((st.coupons || []).some(c => c.code === code)) return {out: {ok:false, msg:'Mã đã tồn tại.'}};
-        st.coupons.unshift({code, percent: C.clampInt(body.percent, 1, 90, 10), maxUses: C.clampInt(body.maxUses, 1, 10000, 50), used: 0,
+        st.coupons.unshift({code, percent: C.clampInt(body.percent, 1, 100, 10), maxUses: C.clampInt(body.maxUses, 1, 10000, 50), used: 0,
           expires: C.cleanStr(body.expires, 10) || new Date(Date.now() + 30*86400000).toISOString().slice(0,10), active: true});
         return {out: {ok:true, msg:'Đã tạo coupon ' + code}};
       }
@@ -145,7 +145,7 @@ module.exports = async (req, res) => {
         if(body.category !== undefined) pl.category = C.cleanStr(body.category, 40) || 'Plugin chính';
         if(body.version !== undefined) pl.version = C.cleanStr(body.version, 30);
         if(body.price !== undefined) pl.price = C.clampInt(body.price, 0, 1000000000, 0);
-        if(body.sale !== undefined) pl.sale = C.clampInt(body.sale, 0, 90, 0);
+        if(body.sale !== undefined) pl.sale = C.clampInt(body.sale, 0, 100, 0);
         if(body.description !== undefined) pl.description = C.cleanStr(body.description, 1000);
         if(body.installGuide !== undefined) pl.installGuide = C.cleanStr(body.installGuide, 2000);
         if(body.usageGuide !== undefined) pl.usageGuide = C.cleanStr(body.usageGuide, 2000);
@@ -361,7 +361,7 @@ module.exports = async (req, res) => {
           const inp = inTiers.find(x => x && x.id === t.id) || inTiers[tiers.indexOf(t)] || {};
           if(inp.days !== undefined){ t.days = C.clampInt(inp.days, 0, 3650, t.days); }
           if(inp.price !== undefined){ t.price = C.clampInt(inp.price, 0, 1000000000, t.price); }
-          if(inp.sale !== undefined){ t.sale = C.clampInt(inp.sale, 0, 90, t.sale); }
+          if(inp.sale !== undefined){ t.sale = C.clampInt(inp.sale, 0, 100, t.sale); }
           changed++;
         }
         const sum = tiers.map(t => O.tierLabel(t.days) + ' → ' + (t.sale ? Math.round(t.price * (100 - t.sale) / 100).toLocaleString('vi-VN') : t.price.toLocaleString('vi-VN')) + 'đ (' + t.sale + '% giảm)').join(' · ');
