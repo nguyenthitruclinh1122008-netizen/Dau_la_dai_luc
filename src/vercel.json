@@ -1,0 +1,35 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/license/activate",
+      "destination": "/api/licenses?via=activate"
+    },
+    {
+      "source": "/api/license/heartbeat",
+      "destination": "/api/licenses?via=heartbeat"
+    },
+    {
+      "source": "/api/verify-key",
+      "destination": "/api/licenses?via=verifykey"
+    },
+    {
+      "source": "/eula",
+      "destination": "/eula/index.html"
+    },
+    {
+      "source": "/privacy",
+      "destination": "/privacy/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate, no-store"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chính sách quyền riêng tư — Đấu La Đại Lục</title>
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:#0b0f19;color:#e7eaf3;font-family:'Segoe UI',system-ui,-apple-system,Roboto,Arial,sans-serif;line-height:1.7}
+.wrap{max-width:860px;margin:0 auto;padding:48px 24px 80px}
+h1{font-size:1.7rem;line-height:1.35;color:#f5c542;margin:0 0 8px}
+h2{font-size:1.22rem;color:#f5c542;margin:36px 0 10px;border-bottom:1px solid #232a3d;padding-bottom:6px}
+h3{font-size:1.05rem;color:#dfe4f2;margin:24px 0 8px}
+p,li{font-size:.98rem;color:#c7cdde}
+strong{color:#f0f3fb}
+table{border-collapse:collapse;width:100%;margin:14px 0;font-size:.95rem}
+th,td{border:1px solid #2a3350;padding:8px 12px;text-align:left;vertical-align:top}
+th{background:#151b2c;color:#f5c542}
+.topbar{display:flex;justify-content:space-between;align-items:center;padding:14px 24px;border-bottom:1px solid #1c2338;position:sticky;top:0;background:rgba(11,15,25,.92);backdrop-filter:blur(6px)}
+.brand{font-weight:700;color:#f5c542;text-decoration:none;letter-spacing:.4px}
+.back{color:#9fb0d0;text-decoration:none;font-size:.92rem}
+.back:hover{color:#f5c542}
+.meta{color:#8fa0c0;font-size:.88rem;margin-bottom:28px}
+ul,ol{padding-left:24px}
+li{margin:6px 0}
+a{color:#f5c542}
+</style>
+</head>
+<body>
+<div class="topbar"><a class="brand" href="/">ĐẤU LA ĐẠI LỤC</a><a class="back" href="/">← Về trang chủ</a></div>
+<div class="wrap">
+<p class="meta">Xem chi tiết cơ chế license tại <a href="/eula">trang EULA</a>.</p>
+<h1>CHÍNH SÁCH QUYỀN RIÊNG TƯ — PLUGIN ĐẤU LA ĐẠI LỤC</h1>
+<p>Phiên bản: 3.7.0 · Ngày hiệu lực: 06/11/2026</p>
+<h2>1. Chúng tôi thu thập ĐÚNG và ĐỦ những gì?</h2>
+<p>Khi plugin kích hoạt key hoặc xác nhận lại định kỳ (heartbeat), hệ thống nhận <strong>đúng 4 trường</strong>:</p>
+<table><thead><tr><th>#</th><th>Trường</th><th>Mục đích</th></tr></thead><tbody>
+<tr><td>1</td><td>Key bản quyền</td><td>Xác nhận key hợp lệ, gói, hạn dùng</td></tr>
+<table><thead><tr><th>2</th><th>HWID <strong>đã băm SHA-256</strong> (UUID cài đặt + tên hệ điều hành + kiến trúc CPU)</th><th>Gắn key với đúng 1 server, chống chia sẻ key</th></tr></thead><tbody>
+<tr><td>3</td><td>Phiên bản plugin</td><td>Tương thích vé bản quyền</td></tr>
+<table><thead><tr><th>4</th><th>Phiên bản Minecraft</th><th>Tương thích vé bản quyền</th></tr></thead><tbody>
+</tbody></table>
+<h2>2. Chúng tôi KHÔNG thu thập gì?</h2>
+<ul>
+<li>❌ Địa chỉ IP của server hoặc của người chơi;</li>
+<li>❌ Danh sách, tên, UUID người chơi;</li>
+<li>❌ Tọa độ, hành vi, chat, thế giới người chơi;</li>
+<li>❌ Nội dung file, dữ liệu server;</li>
+<li>❌ Bất kỳ mã thực thi nào từ xa — server bản quyền chỉ trả về vé ký số và thông tin license, plugin không nhận lệnh để chạy.</li>
+</ul>
+<h2>3. HWID được tạo thế nào?</h2>
+<p>Lần chạy đầu, plugin sinh một <strong>UUID ngẫu nhiên</strong> lưu trong thư mục dữ liệu plugin (`install-id.txt`). HWID = SHA-256(UUID + tên hệ điều hành + kiến trúc CPU), chỉ lấy 40 ký tự hex. Không đọc địa chỉ MAC, không đọc số serial phần cứng.</p>
+<h2>4. Dữ liệu lưu ở đâu, bao lâu?</h2>
+<ul>
+<li>Server bản quyền lưu: băm key, HWID băm, thời điểm kích hoạt, lịch sử heartbeat — để quản lý license của bạn.</li>
+<li>Xóa key (hết hạn/được yêu cầu xóa) → dữ liệu license liên quan được xóa theo.</li>
+<li>Trên server của bạn: plugin lưu cấu hình và dữ liệu gameplay <strong>ngay trên máy bạn</strong> — chúng tôi không có quyền truy cập.</li>
+</ul>
+<h2>5. Thu hồi / hết hạn / ân hạn</h2>
+<ul>
+<li>Key hết hạn hoặc bị thu hồi → plugin hạ về chế độ Free (soft-lock), <strong>không xóa bất kỳ dữ liệu nào</strong> của server bạn.</li>
+<li>Mất mạng: vẫn chạy trong ân hạn mặc định <strong>72 giờ</strong> rồi mới hạ về Free.</li>
+<li>Xem chi tiết trong EULA: https://dau-la-dailuc.netlify.app/eula</li>
+</ul>
+<h2>6. Quyền của bạn</h2>
+<ul>
+<li>Yêu cầu xem, xóa dữ liệu license của bạn: liên hệ qua thông tin hỗ trợ.</li>
+<li>Hủy kích hoạt bất cứ lúc nào: `/dl license deactivate` — dữ liệu local nằm lại server bạn.</li>
+</ul>
+<h2>7. Liên hệ</h2>
+<ul>
+<li>Người bán: [ĐIỀN — tên chủ shop]</li>
+<li>Email: [ĐIỀN]</li>
+<li>Website: https://dau-la-dailuc.netlify.app</li>
+</ul>
+</div>
+</body>
+</html>
