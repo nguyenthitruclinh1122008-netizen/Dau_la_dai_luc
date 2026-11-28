@@ -148,7 +148,7 @@ body.menu-open .drawer-mask{opacity:1;pointer-events:auto}
 <aside class="drawer" id="drawer" aria-label="Menu chính"></aside>
 <main class="wrap" id="app"></main>
 <footer class="wrap">
-  <div>Đấu La Đại Lục — Cửa hàng Plugin bản quyền · web v2.0 (24/11/2026) — Cửa hàng + thanh toán QR/thẻ cào/ví + khu quản trị</div>
+  <div>Đấu La Đại Lục — Cửa hàng Plugin bản quyền · web v2.0 (24/11/2026) — Cửa hàng + thanh toán QR/thẻ cào/ví</div>
   <div style="margin-top:4px">Web v2.0 — dữ liệu (tài khoản, đơn hàng, ví, Plugin) lưu trên <b>máy chủ dữ liệu</b> (backend Vercel Functions).</div>
 </footer>
 <div id="toast"></div>
@@ -2821,7 +2821,7 @@ ROUTES['#/home'] = { title:'Trang chủ', html(){
         ['A18','Thống kê doanh thu','#/a/stats',1],
         ['A19','Tài khoản nhận tiền (QR)','#/a/bank',1],
         ['A11','Cấp tiền trực tiếp vào ví','#/a/credit',1]
-      ].map(f=>{
+      ].filter(f=>!f[3] || isAdmin())  /* 28/11: các mục quản trị (A1/A11/A14–A19) chỉ hiện khi đã đăng nhập đúng tài khoản admin — khách & thành viên thường không thấy */.map(f=>{
         const href = logged ? f[2] : ('#/login?next=' + encodeURIComponent(f[2]));
         return `<a href="${href}" style="display:block;border:1px solid rgba(255,255,255,.14);border-radius:8px;padding:8px 10px;text-decoration:none"><b style="color:#f0b642">${f[1]}</b>${f[3]?' <span class="badge b-warn">quản trị</span>':''}</a>`;
       }).join('')}
