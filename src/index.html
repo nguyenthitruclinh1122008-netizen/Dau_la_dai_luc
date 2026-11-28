@@ -53,6 +53,23 @@ table.tbl{width:100%;border-collapse:collapse;font-size:.86rem;min-width:520px}
 .tbl td{padding:8px 10px;border-bottom:1px solid #20294a;vertical-align:top}
 .tbl tr:last-child td{border-bottom:none}
 .tbl tr:hover td{background:#ffffff08}
+/* responsive bảng: máy tính bảng → chữ nhỏ hơn; điện thoại (<720px) → mỗi dòng = 1 thẻ dọc "nhãn: giá trị", không phải kéo ngang (30/11) */
+@media (max-width:1080px){
+  table.tbl{min-width:0;font-size:.8rem}
+  .tbl th,.tbl td{padding:6px 7px}
+}
+@media (max-width:720px){
+  .tbl-wrap{overflow-x:visible;border:0;background:none;border-radius:0}
+  table.tbl{min-width:0;font-size:.78rem}
+  table.tbl.tbl-cards{border:0;background:none;font-size:.85rem}
+  table.tbl.tbl-cards thead{display:none}
+  table.tbl.tbl-cards tbody{display:block}
+  table.tbl.tbl-cards tr{display:block;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:4px 12px;margin:10px 0}
+  table.tbl.tbl-cards td{display:flex;justify-content:space-between;align-items:center;gap:12px;border:0;padding:7px 0;text-align:right}
+  table.tbl.tbl-cards td::before{content:attr(data-label);font-weight:600;color:var(--mut);text-align:left;flex:0 0 auto;white-space:nowrap}
+  table.tbl.tbl-cards td[data-label=""]::before{display:none}
+  table.tbl.tbl-cards td[colspan]{justify-content:center;text-align:center}
+}
 .code{font-family:ui-monospace,'Cascadia Mono',Consolas,monospace;background:#0d1226;border:1px solid var(--line);border-radius:6px;padding:2px 7px;font-size:.82rem;color:var(--teal)}
 .codebox{font-family:ui-monospace,Consolas,monospace;background:#0d1226;border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:.82rem;white-space:pre-wrap;word-break:break-all;color:#bfe3ff}
 /* badges */
@@ -5035,6 +5052,29 @@ function chartBar(cv, labels, data, color, money){
 
 /* ---------- boot ---------- */
 window.addEventListener('hashchange', render);
+/* --- Responsive bảng: gán nhãn cột từ <thead> vào từng <td> (data-label) — CSS biến dòng bảng thành thẻ dọc trên điện thoại (30/11) --- */
+function tagTblLabels(root){
+  (root || document).querySelectorAll('table.tbl').forEach(t => {
+    const ths = Array.from(t.querySelectorAll('thead th'));
+    if(!ths.length) return;
+    t.classList.add('tbl-cards');
+    t.querySelectorAll('tbody tr').forEach(tr => {
+      const tds = Array.from(tr.children).filter(c => c.tagName === 'TD');
+      if(tds.length !== ths.length) return;
+      tds.forEach((td, i) => {
+        const lbl = ths[i].textContent.trim();
+        if(lbl) td.setAttribute('data-label', lbl);
+      });
+    });
+  });
+}
+let _tagTblPending = false;
+new MutationObserver(() => {
+  if(_tagTblPending) return;
+  _tagTblPending = true;
+  requestAnimationFrame(() => { _tagTblPending = false; tagTblLabels(); });
+}).observe(document.body, {childList:true, subtree:true});
+
 (async () => {
   try{ await render(); }
   catch(e){

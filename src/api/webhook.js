@@ -46,7 +46,7 @@ module.exports = async (req, res) => {
         O.notify(st, user.id, 'deposit', 'Nạp thẻ thành công +' + dep.credit.toLocaleString('vi-VN') + 'đ', 'Số dư mới: ' + tx.balanceAfter.toLocaleString('vi-VN') + 'đ.');
         return {out: {ok:true, msg:'Đã cộng tiền.'}};
       });
-      return C.json(res, 200, result.out || result);
+      return C.json(res, 200, out.out || out);
     }
     return C.fail(res, 401, 'Webhook key không hợp lệ.');
   }catch(e){
